@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Remove="Data\" />
+    <None Remove="Net\" />
+    <None Remove="Resources\umc.html" />
+    <None Remove="Resources\" />
+    <None Remove="Security\" />
+    <None Remove="Sql\" />
+    <None Remove="Web\" />
+  </ItemGroup>
+  <ItemGroup>
+    <Folder Include="Data\" />
+    <Folder Include="Net\" />
+    <Folder Include="Resources\" />
+    <Folder Include="Security\" />
+    <Folder Include="Sql\" />
+    <Folder Include="Web\" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Resources\umc.html" />
+  </ItemGroup>
+</Project>

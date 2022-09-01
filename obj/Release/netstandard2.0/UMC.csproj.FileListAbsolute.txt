@@ -1,0 +1,10 @@
+/Users/wushunming/Documents/Static/UMC.Web/bin/Release/netstandard2.0/UMC.deps.json
+/Users/wushunming/Documents/Static/UMC.Web/bin/Release/netstandard2.0/UMC.dll
+/Users/wushunming/Documents/Static/UMC.Web/bin/Release/netstandard2.0/UMC.pdb
+/Users/wushunming/Documents/Static/UMC.Web/obj/Release/netstandard2.0/UMC.csproj.AssemblyReference.cache
+/Users/wushunming/Documents/Static/UMC.Web/obj/Release/netstandard2.0/UMC.GeneratedMSBuildEditorConfig.editorconfig
+/Users/wushunming/Documents/Static/UMC.Web/obj/Release/netstandard2.0/UMC.AssemblyInfoInputs.cache
+/Users/wushunming/Documents/Static/UMC.Web/obj/Release/netstandard2.0/UMC.AssemblyInfo.cs
+/Users/wushunming/Documents/Static/UMC.Web/obj/Release/netstandard2.0/UMC.csproj.CoreCompileInputs.cache
+/Users/wushunming/Documents/Static/UMC.Web/obj/Release/netstandard2.0/UMC.dll
+/Users/wushunming/Documents/Static/UMC.Web/obj/Release/netstandard2.0/UMC.pdb
