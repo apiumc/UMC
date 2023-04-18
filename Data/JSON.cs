@@ -2,7 +2,9 @@
 using System.Text;
 using System.Reflection;
 using System.Collections;
+using System.Linq;
 using System.Data;
+using System.Collections.Generic;
 
 namespace UMC.Data
 {
@@ -134,14 +136,73 @@ namespace UMC.Data
         /// </summary>
         /// <param name="json">JSON</param>
         /// <returns></returns>
-        public static T Deserialize<T>(string json)
+        public static T Deserialize<T>(string json) where T : new()
         {
             if (String.IsNullOrEmpty(json))
             {
                 return default(T);
             }
             int i = -1;
-            return (T)Deserialize(ref json, ref i, typeof(T));
+            return (T)Deserialize<T>(ref json, ref i);
+        }
+        public static T[] Deserializes<T>(string json) where T : new()
+        {
+            if (String.IsNullOrEmpty(json))
+            {
+                return null;
+            }
+            int i = -1;
+
+            return Deserializes<T>(ref json, ref i);
+        }
+        static T[] Deserializes<T>(ref string input, ref int index) where T : new()
+        {
+
+            IList<T> list = new List<T>();
+            for (index++; index < input.Length; index++)
+            {
+
+                switch (input[index])
+                {
+                    case '[':
+
+                        RemoveEmpty(ref input, ref index);
+                        if (input[index + 1] == ']')
+                        {
+                            index++;
+                            return list.ToArray();
+                        }
+
+
+                        list.Add((T)Deserialize<T>(ref input, ref index));
+
+                        break;
+                    case ',':
+
+                        list.Add((T)Deserialize<T>(ref input, ref index));
+                        break;
+                    case ']':
+                        return list.ToArray();
+
+
+                    case '{':
+                    case '}':
+
+                    case ':':
+                    case '"':
+                    case '\'':
+
+                    case '$':
+                    case '_':
+                    case '.':
+                    case '-':
+                    default:
+                        throw new System.FormatException("非数组格式");
+                }
+
+            }
+            return list.ToArray();
+
         }
         /// <summary>
         /// JSON反序列化
@@ -172,12 +233,14 @@ namespace UMC.Data
             int i = -1;
             return Deserialize(ref json, ref i);
         }
-        static object Deserialize(ref string input, ref int index, Type type)
+
+        static object Deserialize<T>(ref string input, ref int index) where T : new()
         {
+
             var isArray = false;
             var isObject = false;
             IList list = null;
-
+            var type = typeof(T);
             object objValue = null;
             for (index++; index < input.Length; index++)
             {
@@ -188,7 +251,7 @@ namespace UMC.Data
                         isArray = true;
                         if (type.IsGenericType)
                         {
-                            objValue = Reflection.CreateInstance(type);
+                            objValue = new T();
                             list = objValue as IList;
 
                             RemoveEmpty(ref input, ref index);
@@ -240,34 +303,37 @@ namespace UMC.Data
                         if (input[index + 1] == '}')
                         {
                             index++;
-                            return Reflection.CreateInstance(type);
+                            return new T();
                         }
                         var key = Deserialize(ref input, ref index).ToString();
                         if (key == Constructor)
                         {
-                            var sType = Deserialize(ref input, ref index).ToString();
-                            type = UMC.Data.Reflection.CreateType(sType);
+                            Deserialize(ref input, ref index).ToString();
 
-                            objValue = Reflection.CreateInstance(type);
+                            objValue = new T();
                             break;
                         }
-                        objValue = Reflection.CreateInstance(type);
+                        objValue = new T();
                         if (objValue is IJSON)
                         {
                             if (objValue is IJSONType)
                             {
-                                ((IJSON)objValue).Read(key, Deserialize(ref input, ref index, ((IJSONType)objValue).GetType(key)));
+                                ((IJSON)objValue).Read(key, Deserialize(ref input, ref index, ((IJSONType)objValue).GetInstance(key)));
                             }
                             else
                             {
                                 ((IJSON)objValue).Read(key, Deserialize(ref input, ref index));
                             }
                         }
+                        else if (objValue is Record)
+                        {
+                            ((Record)objValue).SetValue(key, Deserialize(ref input, ref index));
+                        }
                         else
                         {
                             var prototyType = type.GetProperty(key
                                 , BindingFlags.Public | BindingFlags.SetProperty | BindingFlags.NonPublic | BindingFlags.Instance);
-                            if (prototyType != null)
+                            if (prototyType != null && prototyType.CanWrite)
                             {
                                 prototyType.SetValue(objValue, Deserialize(ref input, ref index, prototyType.PropertyType), null);
                             }
@@ -300,7 +366,7 @@ namespace UMC.Data
                             {
                                 if (objValue is IJSONType)
                                 {
-                                    ((IJSON)objValue).Read(key2, Deserialize(ref input, ref index, ((IJSONType)objValue).GetType(key2)));
+                                    ((IJSON)objValue).Read(key2, Deserialize(ref input, ref index, ((IJSONType)objValue).GetInstance(key2)));
                                 }
                                 else
                                 {
@@ -309,14 +375,15 @@ namespace UMC.Data
                             }
                             else
                             {
-                                var prototyType2 = type.GetProperty(key2.ToString(), BindingFlags.Public | BindingFlags.SetProperty | BindingFlags.NonPublic | BindingFlags.Instance);
-
+                                var prototyType2 = type.GetProperty(key2
+                                    , BindingFlags.Public | BindingFlags.SetProperty | BindingFlags.NonPublic | BindingFlags.Instance);
                                 if (prototyType2 != null)
                                 {
                                     var v = Deserialize(ref input, ref index, prototyType2.PropertyType);
                                     if (prototyType2.CanWrite)
                                     {
                                         prototyType2.SetValue(objValue, v, null);
+
                                     }
 
                                 }
@@ -382,6 +449,413 @@ namespace UMC.Data
             return objValue;
 
         }
+        //Func
+        static object Deserialize(ref string input, ref int index, Func<Object> type)
+        {
+
+            var isArray = false;
+            var isObject = false;
+            ArrayList list = null;
+
+            object objValue = null;
+            for (index++; index < input.Length; index++)
+            {
+
+                switch (input[index])
+                {
+                    case '[':
+                        {
+                            isArray = true;
+
+                            objValue = list = new ArrayList();
+                            RemoveEmpty(ref input, ref index);
+                            if (input[index + 1] == ']')
+                            {
+                                index++;
+                                return Array.CreateInstance(type().GetType(), 0);
+                            }
+                            list.Add(Deserialize(ref input, ref index, type));
+
+                        }
+                        break;
+                    case '{':
+                        isObject = true;
+                        RemoveEmpty(ref input, ref index);
+                        objValue = type();
+                        if (input[index + 1] == '}')
+                        {
+                            index++;
+                            return objValue;
+                        }
+                        var key = Deserialize(ref input, ref index).ToString();
+
+                        if (objValue is IJSON)
+                        {
+                            if (objValue is IJSONType)
+                            {
+                                ((IJSON)objValue).Read(key, Deserialize(ref input, ref index, ((IJSONType)objValue).GetInstance(key)));
+                            }
+                            else
+                            {
+                                ((IJSON)objValue).Read(key, Deserialize(ref input, ref index));
+                            }
+                        }
+                        else if (objValue is Record)
+                        {
+                            ((Record)objValue).SetValue(key, Deserialize(ref input, ref index));
+                        }
+                        else if (objValue is IDictionary)
+                        {
+                            ((IDictionary)objValue)[key] = Deserialize(ref input, ref index);
+                        }
+                        else
+                        {
+                            var prototyType = objValue.GetType().GetProperty(key
+                                , BindingFlags.Public | BindingFlags.SetProperty | BindingFlags.NonPublic | BindingFlags.Instance);
+                            if (prototyType != null && prototyType.CanWrite)
+                            {
+                                prototyType.SetValue(objValue, Deserialize(ref input, ref index, prototyType.PropertyType), null);
+                            }
+                            else
+                            {
+                                Deserialize(ref input, ref index);
+                            }
+                        }
+                        break;
+                    case ',':
+                        if (isArray)
+                        {
+                            list.Add(Deserialize(ref input, ref index, type));
+
+                        }
+                        else if (isObject)
+                        {
+                            var key2 = Deserialize(ref input, ref index) as string;
+                            if (objValue is IJSON)
+                            {
+                                if (objValue is IJSONType)
+                                {
+                                    ((IJSON)objValue).Read(key2, Deserialize(ref input, ref index, ((IJSONType)objValue).GetInstance(key2)));
+                                }
+                                else
+                                {
+                                    ((IJSON)objValue).Read(key2, Deserialize(ref input, ref index));
+                                }
+
+                            }
+                            else if (objValue is IDictionary)
+                            {
+                                ((IDictionary)objValue)[key2] = Deserialize(ref input, ref index);
+                            }
+                            else if (objValue is Record)
+                            {
+                                ((Record)objValue).SetValue(key2, Deserialize(ref input, ref index));
+
+                            }
+                            else
+                            {
+                                var prototyType2 = objValue.GetType().GetProperty(key2
+                                    , BindingFlags.Public | BindingFlags.SetProperty | BindingFlags.NonPublic | BindingFlags.Instance);
+                                if (prototyType2 != null)
+                                {
+                                    var v = Deserialize(ref input, ref index, prototyType2.PropertyType);
+                                    if (prototyType2.CanWrite)
+                                    {
+                                        prototyType2.SetValue(objValue, v, null);
+
+                                    }
+
+                                }
+                                else
+                                {
+                                    Deserialize(ref input, ref index);
+                                }
+                            }
+                        }
+                        break;
+                    case ']':
+                        if (isArray)
+                        {
+                            if (list.Count > 0)
+                            {
+                                return list.ToArray(list[0].GetType());
+                            }
+                            return objValue;
+                        }
+                        else
+                        {
+                            throw new System.FormatException("非JSON格式");
+                        }
+                    case '}':
+                        if (isObject)
+                        {
+                            return objValue;
+                        }
+                        else
+                        {
+                            throw new System.FormatException("非JSON格式");
+                        }
+                    case ':':
+                        break;
+                    case '"':
+                    case '\'':
+                        return Deserialize(ref input, ref index, input[index]);
+
+                    case '$':
+                    case '_':
+                    case '.':
+                    case '-':
+                        return Reflection.Parse(Deserialize2(ref input, ref index), type());
+                    default:
+                        var code = input[index];
+                        if ((code > 64 && code < 91) || (code > 96 && code < 123) || (code > 47 && code < 58))
+                        {
+                            var c = Deserialize2(ref input, ref index);
+                            switch (c)
+                            {
+                                case "undefined":
+                                case "null":
+                                    return null;
+                                default:
+
+                                    return Reflection.Parse(c, type());
+                            }
+                        }
+                        break;
+                }
+
+            }
+            return objValue;
+
+        }
+
+        //Func
+        static object Deserialize(ref string input, ref int index, Type type)
+        {
+
+            var isArray = false;
+            var isObject = false;
+            IList list = null;
+
+            object objValue = null;
+            for (index++; index < input.Length; index++)
+            {
+
+                switch (input[index])
+                {
+                    case '[':
+                        isArray = true;
+                        if (type.IsGenericType)
+                        {
+                            objValue = Reflection.CreateInstance(type);
+                            list = objValue as IList;
+
+                            RemoveEmpty(ref input, ref index);
+                            if (input[index + 1] == ']')
+                            {
+                                index++;
+                                return objValue;
+                            }
+                            var gType = type.GetGenericArguments()[0];
+
+                            list.Add(Deserialize(ref input, ref index, gType));
+
+                        }
+                        else if (type.IsArray)
+                        {
+
+                            objValue = list = new ArrayList();
+                            var gType = type.GetElementType();
+                            RemoveEmpty(ref input, ref index);
+                            if (input[index + 1] == ']')
+                            {
+                                index++;
+                                return Array.CreateInstance(gType, 0);
+                            }
+                            list.Add(Deserialize(ref input, ref index, gType));
+
+                        }
+                        else
+                        {
+                            throw new System.ArrayTypeMismatchException(type.ToString());
+                        }
+                        break;
+                    case '{':
+                        if (type.IsArray)
+                        {
+                            var eType = type.GetElementType();
+                            var arr = Array.CreateInstance(eType, 1);
+                            index--;
+                            arr.SetValue(Deserialize(ref input, ref index, eType), 0);
+                            return arr;
+                        }
+                        isObject = true;
+                        RemoveEmpty(ref input, ref index);
+                        if (input[index + 1] == '}')
+                        {
+                            index++;
+                            return Reflection.CreateInstance(type);
+                        }
+                        var key = Deserialize(ref input, ref index).ToString();
+                        if (key == Constructor)
+                        {
+                            var sType = Deserialize(ref input, ref index).ToString();
+                            type = UMC.Data.Reflection.CreateType(sType);
+
+                            objValue = Reflection.CreateInstance(type);
+                            break;
+                        }
+                        objValue = Reflection.CreateInstance(type);
+                        if (objValue is IJSON)
+                        {
+                            if (objValue is IJSONType)
+                            {
+                                ((IJSON)objValue).Read(key, Deserialize(ref input, ref index, ((IJSONType)objValue).GetInstance(key)));
+                            }
+                            else
+                            {
+                                ((IJSON)objValue).Read(key, Deserialize(ref input, ref index));
+                            }
+                        }
+                        else if (objValue is IDictionary)
+                        {
+                            ((IDictionary)objValue)[key] = Deserialize(ref input, ref index);
+                        }
+                        else if (objValue is Record)
+                        {
+                            ((Record)objValue).SetValue(key, Deserialize(ref input, ref index));
+                        }
+                        else
+                        {
+                            var prototyType = type.GetProperty(key
+                                , BindingFlags.Public | BindingFlags.SetProperty | BindingFlags.NonPublic | BindingFlags.Instance);
+                            if (prototyType != null && prototyType.CanWrite)
+                            {
+                                prototyType.SetValue(objValue, Deserialize(ref input, ref index, prototyType.PropertyType), null);
+                            }
+                            else
+                            {
+                                Deserialize(ref input, ref index);
+                            }
+                        }
+                        break;
+                    case ',':
+                        if (isArray)
+                        {
+                            if (type.IsArray)
+                            {
+                                list.Add(Deserialize(ref input, ref index, type.GetElementType()));
+                            }
+                            else if (type.IsGenericType)
+                            {
+                                list.Add(Deserialize(ref input, ref index, type.GetGenericArguments()[0]));
+                            }
+                            else
+                            {
+                                Deserialize(ref input, ref index);
+                            }
+                        }
+                        else if (isObject)
+                        {
+                            var key2 = Deserialize(ref input, ref index) as string;
+                            if (objValue is IJSON)
+                            {
+                                if (objValue is IJSONType)
+                                {
+                                    ((IJSON)objValue).Read(key2, Deserialize(ref input, ref index, ((IJSONType)objValue).GetInstance(key2)));
+                                }
+                                else
+                                {
+                                    ((IJSON)objValue).Read(key2, Deserialize(ref input, ref index));
+                                }
+                                
+                            }
+                            else if (objValue is IDictionary)
+                            {
+                                ((IDictionary)objValue)[key2] = Deserialize(ref input, ref index);
+                            }
+                            else if (objValue is Record)
+                            {
+                                ((Record)objValue).SetValue(key2, Deserialize(ref input, ref index));
+
+                            }
+                            else
+                            {
+                                var prototyType2 = type.GetProperty(key2
+                                    , BindingFlags.Public | BindingFlags.SetProperty | BindingFlags.NonPublic | BindingFlags.Instance);
+                                if (prototyType2 != null)
+                                {
+                                    var v = Deserialize(ref input, ref index, prototyType2.PropertyType);
+                                    if (prototyType2.CanWrite)
+                                    {
+                                        prototyType2.SetValue(objValue, v, null);
+
+                                    }
+
+                                }
+                                else
+                                {
+                                    Deserialize(ref input, ref index);
+                                }
+                            }
+                        }
+                        break;
+                    case ']':
+                        if (isArray)
+                        {
+                            if (type.IsArray)
+                            {
+                                return ((ArrayList)list).ToArray(type.GetElementType());
+                            }
+                            return objValue;
+                        }
+                        else
+                        {
+                            throw new System.FormatException("非JSON格式");
+                        }
+                    case '}':
+                        if (isObject)
+                        {
+                            return objValue;
+                        }
+                        else
+                        {
+                            throw new System.FormatException("非JSON格式");
+                        }
+                    case ':':
+                        break;
+                    case '"':
+                    case '\'':
+                        return Reflection.Parse(Deserialize(ref input, ref index, input[index]), type);
+
+                    case '$':
+                    case '_':
+                    case '.':
+                    case '-':
+                        return Reflection.Parse(Deserialize2(ref input, ref index), type);
+                    default:
+                        var code = input[index];
+                        if ((code > 64 && code < 91) || (code > 96 && code < 123) || (code > 47 && code < 58))
+                        {
+                            var c = Deserialize2(ref input, ref index);
+                            switch (c)
+                            {
+                                case "undefined":
+                                case "null":
+                                    return null;
+                                default:
+
+                                    return Reflection.Parse(c, type);
+                            }
+                        }
+                        break;
+                }
+
+            }
+            return objValue;
+
+        }
+
         static void RemoveEmpty(ref string input, ref int index)
         {
             var isb = false;
@@ -819,9 +1293,7 @@ namespace UMC.Data
                 }
                 if (obj is IJSON)
                 {
-                    //writer.Write('{');
                     ((IJSON)obj).Write(writer);
-                    //writer.Write('}');
                 }
                 else if (obj == System.DBNull.Value)
                 {
@@ -941,11 +1413,11 @@ namespace UMC.Data
 
                     for (int i = 0; i < array.Length; i++)
                     {
-                        this.SerializeObject(array.GetValue(i), writer);
-                        if (i != array.Length - 1)
+                        if (i > 0)
                         {
                             writer.Write(',');
                         }
+                        this.SerializeObject(array.GetValue(i), writer);
                     }
                     writer.Write(']');
                 }
@@ -958,6 +1430,26 @@ namespace UMC.Data
                     var dicEnum = obj as IDictionaryEnumerator;
                     dicEnum.Reset();
                     this.Serialize(dicEnum, writer);
+                }
+                else if (obj is Record)
+                {
+                    writer.Write('{');
+                    var IsNext = false;
+                    ((Record)obj).GetValues((t, v) =>
+                    {
+                        if (IsNext)
+                        {
+                            writer.Write(',');
+                        }
+                        else
+                        {
+                            IsNext = true;
+                        }
+                        Serialize(t, writer);
+                        writer.Write(':');
+                        Serialize(v, writer);
+                    });
+                    writer.Write('}');
                 }
                 else if (obj is System.Uri)
                 {
@@ -1041,7 +1533,7 @@ namespace UMC.Data
             }
             else
             {
-                writer.Write("\"\"");
+                writer.Write("null");
             }
         }
         private bool SerializeProperty(object obj, PropertyInfo property, System.IO.TextWriter writer, bool IsEcho)

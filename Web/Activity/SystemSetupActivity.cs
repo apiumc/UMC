@@ -9,7 +9,7 @@ namespace UMC.Web.Activity
 {
 
     [Mapping("System", "Setup", Auth = WebAuthType.All, Desc = "UMC安装管理", Weight = 0)]
-    class SystemSetupActivity : WebActivity
+    public class SystemSetupActivity : WebActivity
     {
         string MySQL(WebMeta meta)
         {
@@ -47,13 +47,13 @@ namespace UMC.Web.Activity
         public override void ProcessActivity(WebRequest request, WebResponse response)
         {
 
-            var Initializers = Data.Sql.Initializer.Initializers();
+            // var Initializers = Data.Sql.Initializer.Initializers();
             var name = this.AsyncDialog("Name", g =>
             {
                 var fm = new UISheetDialog() { Title = "选择安装组件" };
-                foreach (var v in Initializers)
+                foreach (var v in Data.Sql.Initializer.Initializers)
                 {
-                    fm.Options.Add(new UIClick(v.Name) { Text = v.Caption }.Send(request.Model, request.Command));
+                    fm.Put(new UIClick(v.Name) { Text = v.Caption }.Send(request.Model, request.Command));
 
                 }
                 return fm;
@@ -68,6 +68,8 @@ namespace UMC.Web.Activity
                         fm.AddText("模块", "Model").PlaceHolder("触发的模块");
                         fm.AddText("指令", "Command").PlaceHolder("触发的指令");
                         fm.AddText("参数", "Send").NotRequired().PlaceHolder("触发的参数");
+                        fm.Submit("执行指令");
+                        fm.AddUIIcon("\uf1b3", "扫描模块", "从新加载模块类型").Command(request.Model, request.Command, "Scanning");
                         return fm;
                     });
                     var send = Command["Send"];
@@ -84,30 +86,24 @@ namespace UMC.Web.Activity
                 case "Scanning":
 
                     Reflection.Instance().ScanningClass();
-                    Utility.Writer(Utility.MapPath("App_Data/register.net"), JSON.Serialize(new WebMeta().Put("time", UMC.Data.Utility.TimeSpan()).Put("data", WebRuntime.RegisterCls())), false);
                     this.Prompt("已从新扫描类型", false);
 
                     this.Context.Send($"{request.Model}.{request.Command}", true);
                     break;
                 case "Mapping":
 
-                    var initializers = Data.Sql.Initializer.Initializers();
                     var setup = Reflection.Configuration("setup") ?? new Data.ProviderConfiguration();
 
                     var data = new System.Data.DataTable();
                     data.Columns.Add("name");
                     data.Columns.Add("text");
                     data.Columns.Add("setup", typeof(bool));
-                    foreach (var n in initializers)
+                    foreach (var n in setup.Providers)
                     {
-                        bool IsOk = setup.Providers.ContainsKey(n.Name);
-                        if (IsOk)
-                        {
-                            IsOk = String.IsNullOrEmpty(setup[n.Name].Attributes["setup"]) == false;
-                        }
-                        data.Rows.Add(n.Name, n.Caption, IsOk);
+                        var initer3 = Initializer.Initializers.FirstOrDefault(r => String.Equals(r.Name, n.Name));
+                        data.Rows.Add(n.Name, initer3?.Caption ?? n.Name, String.IsNullOrEmpty(n.Attributes["setup"]) == false);
                     }
-                    this.Context.Response.Redirect(new WebMeta().Put("component", data).Put("data", WebServlet.Mapping()));
+                    response.Redirect(new WebMeta().Put("component", data).Put("data", WebServlet.Mapping()));
                     break;
                 default:
                     break;
@@ -119,21 +115,20 @@ namespace UMC.Web.Activity
                 this.Prompt("只有管理员才能检测升级");
             }
 
-            var initer = Initializers.FirstOrDefault(r => String.Equals(r.Name, name));
+            var initer = Initializer.Initializers.FirstOrDefault(r => String.Equals(r.Name, name));
             if (initer == null)
             {
                 this.Prompt("无此业务组件");
             }
             var database = Reflection.Configuration("database") ?? new UMC.Data.ProviderConfiguration();
-            if (String.IsNullOrEmpty(initer.ProviderName) == false && database.Providers.ContainsKey(initer.ProviderName) == false)
+            if (String.IsNullOrEmpty(initer.ProviderName) == false && database.ContainsKey(initer.ProviderName) == false)
             {
                 var type = this.AsyncDialog("type", g =>
                 {
                     var fm = new UISheetDialog() { Title = "安装数据库" };
-
-                    fm.Options.Add(new UIClick("Oracle") { Text = "Oracle数据库" }.Send(request.Model, request.Command));
-                    fm.Options.Add(new UIClick("MySql") { Text = "MySql数据库" }.Send(request.Model, request.Command));
-                    fm.Options.Add(new UIClick("MSSQL") { Text = "SQL Server数据库" }.Send(request.Model, request.Command));
+                    fm.Put(new UIClick("Oracle") { Text = "Oracle数据库" }.Send(request.Model, request.Command))
+                    .Put(new UIClick("MySql") { Text = "MySql数据库" }.Send(request.Model, request.Command))
+                    .Put(new UIClick("MSSQL") { Text = "SQL Server数据库" }.Send(request.Model, request.Command));
                     return fm;
                 });
                 var Settings = this.AsyncDialog("Settings", g =>
@@ -177,10 +172,10 @@ namespace UMC.Web.Activity
                 {
                     case "SQLite":
                         provder = UMC.Data.Provider.Create("Database", typeof(UMC.Data.Sql.SQLiteDbProvider).FullName);
-                         
+
 
                         var fname = Settings["File"] + ".sqlite"; ;
-                         
+
 
                         var path = UMC.Data.Reflection.AppDataPath(fname);
 
@@ -220,9 +215,8 @@ namespace UMC.Web.Activity
 
                     var p = UMC.Data.Provider.Create(initer.ProviderName, provder.Type);
                     p.Attributes.Add(provder.Attributes);
-                    database.Providers[initer.ProviderName] = p;
+                    database.Add(p);
 
-                    UMC.Data.ProviderConfiguration.Cache.Clear();
                     Reflection.Configuration("database", database);
                 }
                 catch (Exception ex)
@@ -258,9 +252,7 @@ namespace UMC.Web.Activity
                     }
                     provder.Attributes["setup"] = "true";
 
-                    Setup.Providers[initer.ProviderName] = provder;
-
-                    UMC.Data.ProviderConfiguration.Cache.Clear();
+                    Setup.Add(provder);
                     Reflection.Configuration("setup", Setup);
 
                     log.End("安装完成", "请刷新界面");

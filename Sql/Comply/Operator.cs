@@ -5,7 +5,7 @@ using System.Data.Common;
 
 namespace UMC.Data.Sql
 {
-    class Operator<T> : IOperator<T> where T : class
+    class Operator<T> : IOperator<T> where T : Record, new()
     {
         IWhere<T> constr;
         Operator opor;
@@ -74,67 +74,40 @@ namespace UMC.Data.Sql
 
         IWhere<T> IOperator<T>.Unequal(T value)
         {
-            var dic = CBO.GetProperty(value);
-            var em = dic.GetEnumerator();
-            while (em.MoveNext())
-            {
-                this.opor.Unequal(em.Current.Key, em.Current.Value);
-            }
+            value.GetValues((t, v) => this.opor.Unequal(t, v));
             return constr;
         }
 
         IWhere<T> IOperator<T>.Equal(T value)
         {
-            var dic = CBO.GetProperty(value);
-            var em = dic.GetEnumerator();
-            while (em.MoveNext())
-            {
-                this.opor.Equal(em.Current.Key, em.Current.Value);
-            }
+            value.GetValues((t, v) => this.opor.Equal(t, v));
+            
             return constr;
         }
 
         IWhere<T> IOperator<T>.Greater(T value)
         {
-            var dic = CBO.GetProperty(value);
-            var em = dic.GetEnumerator();
-            while (em.MoveNext())
-            {
-                this.opor.Greater(em.Current.Key, em.Current.Value);
-            }
+            value.GetValues((t, v) => this.opor.Greater(t, v));
+            
             return constr;
         }
 
         IWhere<T> IOperator<T>.Smaller(T value)
         {
-            var dic = CBO.GetProperty(value);
-            var em = dic.GetEnumerator();
-            while (em.MoveNext())
-            {
-                this.opor.Smaller(em.Current.Key, em.Current.Value);
-            }
+            value.GetValues((t, v) => this.opor.Smaller(t, v));
+            
             return constr;
         }
 
         IWhere<T> IOperator<T>.GreaterEqual(T value)
-        {
-            var dic = CBO.GetProperty(value);
-            var em = dic.GetEnumerator();
-            while (em.MoveNext())
-            {
-                this.opor.GreaterEqual(em.Current.Key, em.Current.Value);
-            }
+        { 
+            value.GetValues((t, v) => this.opor.GreaterEqual(t, v)); 
             return constr;
         }
 
         IWhere<T> IOperator<T>.SmallerEqual(T value)
         {
-            var dic = CBO.GetProperty(value);
-            var em = dic.GetEnumerator();
-            while (em.MoveNext())
-            {
-                this.opor.SmallerEqual(em.Current.Key, em.Current.Value);
-            }
+            value.GetValues((t, v) => this.opor.SmallerEqual(t, v));
             return constr;
         }
 
@@ -150,47 +123,32 @@ namespace UMC.Data.Sql
 
         IWhere<T> IOperator<T>.In(T field, params object[] values)
         {
-            var dic = CBO.GetProperty(field);
-            if (dic.Count > 1)
-            {
-                throw new ArgumentException("实体In，只能有一个字段", "field");
-            }
-            var em = dic.GetEnumerator();
-            if (em.MoveNext())
+            field.GetValues((t, v) =>
             {
                 var list = new List<object>();
                 list.AddRange(values);
-                list.Add(em.Current.Value);
-                this.opor.In(em.Current.Key, list.ToArray());
-            }
+                list.Add(v);
+                this.opor.In(t, list.ToArray());
+
+            });
             return constr;
         }
 
         IWhere<T> IOperator<T>.NotIn(T field, params object[] values)
         {
-            var dic = CBO.GetProperty(field);
-            var em = dic.GetEnumerator();
-            if (em.MoveNext())
+            field.GetValues((t, v) =>
             {
                 var list = new List<object>();
                 list.AddRange(values);
-                list.Add(em.Current.Value);
-                this.opor.NotIn(em.Current.Key, list.ToArray());
-            }
+                list.Add(v);
+                this.opor.NotIn(t, list.ToArray());
+            });
             return constr;
         }
         IWhere<T> IOperator<T>.In(T field, Script script)
         {
-            var dic = CBO.GetProperty(field);
-            if (dic.Count > 1)
-            {
-                throw new ArgumentException("实体In，只能有一个字段", "field");
-            }
-            var em = dic.GetEnumerator();
-            if (em.MoveNext())
-            {
-                this.opor.In(em.Current.Key, script);
-            }
+            field.GetValues((t, v) => opor.In(t, script));
+            
             return constr;
         }
 
@@ -202,16 +160,7 @@ namespace UMC.Data.Sql
 
         IWhere<T> IOperator<T>.NotIn(T field, Script script)
         {
-            var dic = CBO.GetProperty(field);
-            if (dic.Count > 1)
-            {
-                throw new ArgumentException("实体NotIn，只能有一个字段", "field");
-            }
-            var em = dic.GetEnumerator();
-            if (em.MoveNext())
-            {
-                this.opor.NotIn(em.Current.Key, script);
-            }
+            field.GetValues((t, v) => opor.NotIn(t, script));
             return constr;
         }
 
@@ -235,31 +184,25 @@ namespace UMC.Data.Sql
 
         IWhere<T> IOperator<T>.Like(T field, bool schar)
         {
-            //this.constr.db
-
-            var dic = CBO.GetProperty(field);
-            var em = dic.GetEnumerator();
-            while (em.MoveNext())
+            field.GetValues((t, v) =>
             {
                 string from = "{0}";
                 if (schar)
                 {
                     from = "{0}%";
                 }
-                this.opor.Like(em.Current.Key, String.Format(from, em.Current.Value));
-            }
+                this.opor.Like(t, String.Format(from, v));
+            });
             return constr;
         }
         IWhere<T> IOperator<T>.Like(T field)
         {
 
-            var dic = CBO.GetProperty(field);
-            var em = dic.GetEnumerator();
-            while (em.MoveNext())
+            field.GetValues((t, v) =>
             {
                 string from = "%{0}%";
-                this.opor.Like(em.Current.Key, String.Format(from, em.Current.Value));
-            }
+                this.opor.Like(t, String.Format(from, v));
+            });
             return constr;
         }
 
@@ -442,24 +385,7 @@ namespace UMC.Data.Sql
         }
 
         #endregion
-
-        #region IOperator Members
-
-
-        //IWhere IOperator.Contains()
-        //{
-
-        //    var query = new Conditions();
-        //    query.GroubId = this.condit.GroubId;
-        //    query.IsContainFrist = true;
-        //    query.Arguments = this.condit.Arguments;
-        //    return query;
-        //    //return new Operator(query, this.IsOr);
-
-        //}
-
-        #endregion
-
+ 
         #region IOperator Members
 
 

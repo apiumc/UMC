@@ -25,12 +25,10 @@ namespace UMC.Data
     /// <summary>
     /// 处理方法接口
     /// </summary>
-    public interface IDoWork
+    public interface IDoTask
     {
-        /// <summary>
-        /// 执行的方法
-        /// </summary>
-        /// <param name="dictionary">字典参数</param>
-        void Do(System.Collections.IDictionary dictionary);
+
+        public int Time { get; }
+
     }
 }

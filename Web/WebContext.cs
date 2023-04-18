@@ -13,7 +13,15 @@ namespace UMC.Web
     /// </summary>
     public class WebContext
     {
-
+        static WebContext()
+        {
+            if (WebRuntime.isScanning() == false)
+            {
+                UMC.Data.Reflection.Instance().ScanningClass();
+                //String mapFile = Utility.MapPath("App_Data/register.net");
+                //Utility.Writer(mapFile, JSON.Serialize(new WebMeta().Put("time", Utility.TimeSpan()).Put("data", WebRuntime.RegisterCls())), false);
+            }
+        }
 
         internal WebRuntime runtime;
 
@@ -203,6 +211,10 @@ namespace UMC.Web
             {
                 return runtime.Request;
             }
+        }
+        public void OutputFinish()
+        {
+            runtime.Client.Atfer(this);
         }
         /// <summary>
         /// 响应信息

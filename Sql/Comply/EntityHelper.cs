@@ -1,9 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
+using System.Reflection;
 using System.Text;
 
 namespace UMC.Data.Sql
 {
+
 
     class EntityHelper
     {
@@ -12,82 +15,26 @@ namespace UMC.Data.Sql
             get;
             private set;
         }
-        public class FieldInfo
-        {
-            public System.Reflection.PropertyInfo Property
-            {
-                get;
-                set;
-            }
-            public FieldAttribute Attribute
-            {
-                get;
-                set;
-            }
-            public string Name
-            {
-                get;
-                set;
-            }
-            public int FieldIndex
-            {
-                get;
-                set;
-            }
-        }
 
         /// <summary>
         /// 类型的表属性
         /// </summary>
-        public TableAttribute TableInfo
+        public String TableName
         {
             get;
             set;
         }
-        /// <summary>
-        /// 类型的所有属性
-        /// </summary>
-        public List<FieldInfo> Fields
-        {
-            get;
-            set;
-        }
-        public Type ObjType;
+        
         DbProvider Provider;
-        /// <summary>
-        /// 对应的表字段
-        /// </summary>
-        public EntityHelper(DbProvider dbProvider, Type type, String tableName)
+        
+        public EntityHelper(DbProvider dbProvider, String tableName)
         {
             this.Provider = dbProvider;
             this.Arguments = new List<object>();
-            this.Fields = new List<FieldInfo>();
-            this.ObjType = type;
-            if (String.IsNullOrEmpty(tableName))
-            {
-                object[] objs = type.GetCustomAttributes(false);
-                foreach (object o in objs)
-                {
-                    if (o is TableAttribute)
-                    {
-                        TableInfo = o as TableAttribute;
-                        tableName = TableInfo.Name;
-                        break;
-                    }
-                }
-                if (String.IsNullOrEmpty(tableName))
-                {
-                    tableName = type.Name;
-                }
-            }
-
-            Bind(type, tableName);
+            this.TableName = tableName;
+            
         }
 
-        public EntityHelper(DbProvider dbProvider, Type type)
-            : this(dbProvider, type, String.Empty)
-        {
-        }
 
         String ObjectName(String name)
         {
@@ -98,92 +45,84 @@ namespace UMC.Data.Sql
 
             return name;
         }
-        void Bind(Type type, string tableName)
-        {
-            this.TableInfo = new TableAttribute();
-
-            TableInfo.Name = ObjectName(tableName);
-            var PropertyInfos = type.GetProperties();
-            foreach (System.Reflection.PropertyInfo prInfo in PropertyInfos)
-            {
-                if (prInfo.CanRead)
-                {
-                    var objs = prInfo.GetCustomAttributes(false);
-                    FieldAttribute field = new FieldAttribute();
-                    foreach (object o in objs)
-                    {
-                        if (o is FieldAttribute)
-                        {
-                            field = o as FieldAttribute;
-                            if (String.IsNullOrEmpty(field.Field))
-                            {
-                                field.Field = prInfo.Name;
-                            }
-                            break;
-                        }
-                    }
-                    if (String.IsNullOrEmpty(field.Field))
-                    {
-                        field.Field = prInfo.Name;
-                    }
-
-                    var enField = new FieldInfo();
-                    enField.Property = prInfo;
-                    enField.Attribute = field;
-                    enField.Name = prInfo.Name;
-                    Fields.Add(enField);
-                }
-            }
-        }
-        /// <summary>
-        /// 创建插入实体SQL脚本
-        /// </summary>
-        /// <returns></returns>
-        public string CreateInsertText(object entity)
-        {
-
-            StringBuilder sb = new StringBuilder();
-            sb.AppendFormat("INSERT INTO {0}(", TableInfo.Name);
+        public string CreateInsertText<T>(T entity) where T : Record
+        {  StringBuilder sb = new StringBuilder();
+            sb.AppendFormat("INSERT INTO {0}(", this.TableName);
             StringBuilder sb2 = new StringBuilder();
             sb2.Append("VALUES(");
             bool IsMush = false;
             this.Arguments.Clear();
-
-            for (int i = 0; i < Fields.Count; i++)
+            
+            entity.GetValues((field, value) =>
             {
-                var field = Fields[i];
-                if (field.Attribute.Insert)
+
+                if (IsMush)
                 {
-                    if (field.Property == null)
-                    {
-                        continue;
-                    }
-                    var value = field.Property.GetValue(entity, null) ?? null;
-                    if (value == null)
-                    {
-                        continue;
-                    }
-
-                    if (IsMush)
-                    {
-                        sb.Append(",");
-                        sb2.Append(",");
-                    }
-                    else
-                    {
-                        IsMush = true;
-                    }
-
-                    sb.Append(Provider.QuotePrefix);
-                    sb.Append(ObjectName(field.Attribute.Field));
-                    sb.Append(Provider.QuoteSuffix);
-
-                    sb2.Append('{');
-                    sb2.Append(this.Arguments.Count);
-                    sb2.Append('}');
-
-                    this.Arguments.Add(this.GetArgumentValue(value, field.Property));
+                    sb.Append(",");
+                    sb2.Append(",");
                 }
+                else
+                {
+                    IsMush = true;
+                }
+
+                sb.Append(Provider.QuotePrefix);
+                sb.Append(ObjectName(field as string));
+                sb.Append(Provider.QuoteSuffix);
+
+                sb2.Append('{');
+                sb2.Append(this.Arguments.Count);
+                sb2.Append('}');
+
+                this.Arguments.Add(value);
+
+            });
+
+            sb.Append(")");
+            sb2.Append(")");
+            return sb.ToString() + sb2.ToString();
+
+        }
+        public string CreateInsertText(System.Collections.IDictionary fieldValues)
+        {
+
+            StringBuilder sb = new StringBuilder();
+            sb.AppendFormat("INSERT INTO {0}(", this.TableName);
+            StringBuilder sb2 = new StringBuilder();
+            sb2.Append("VALUES(");
+            bool IsMush = false;
+            this.Arguments.Clear();
+            var values = fieldValues.GetEnumerator();
+
+            while (values.MoveNext())
+            {
+                //var field = values.Key as string;
+                var value = values.Value;
+                if (value == null)
+                {
+                    continue;
+                }
+
+                if (IsMush)
+                {
+                    sb.Append(",");
+                    sb2.Append(",");
+                }
+                else
+                {
+                    IsMush = true;
+                }
+
+                sb.Append(Provider.QuotePrefix);
+                sb.Append(ObjectName(values.Key as string));
+                sb.Append(Provider.QuoteSuffix);
+
+                sb2.Append('{');
+                sb2.Append(this.Arguments.Count);
+                sb2.Append('}');
+
+                this.Arguments.Add(value);
+
             }
 
             sb.Append(")");
@@ -197,164 +136,75 @@ namespace UMC.Data.Sql
         /// <returns></returns>
         public string CreateDeleteText()
         {
-            return String.Format("DELETE FROM {0} ", TableInfo.Name);
+            return String.Format("DELETE FROM {0} ", TableName);
 
         }
         /// <summary>
         /// 创建实体查询SQL脚本
         /// </summary>
         /// <returns></returns>
-        public string CreateSelectText(object entity)
+        public string CreateSelectText<T>(T entity) where T : Record, new()
         {
-            this.IsClearIndex = false;
-            bool IsEntity = false;
-            if (entity != null)
-            {
-                IsEntity = this.ObjType.Equals(entity.GetType());
-            }
             StringBuilder sb = new StringBuilder();
             sb.Append("SELECT ");
-            bool IsMush = false; int index = 0;
+            bool IsMush = false; 
 
-
-            foreach (var field in Fields)
+            entity.GetValues((field, values) =>
             {
-                if (field.Attribute.Select)
+                if (IsMush)
                 {
-                    if (IsEntity)
-                    {
-                        if (field.Property != null)
-                        {
-                            var value = field.Property.GetValue(entity, null) ?? null;
-                            if (value == null)
-                            {
-                                continue;
-                            }
-                        }
-                    }
-                    if (IsMush)
-                    {
-                        sb.Append(",");
-                    }
-                    else
-                    {
-                        IsMush = true;
-                    }
-                    String sfield = field.Attribute.Field;
-                    if (field.Attribute.IsExpression)
-                    {
-                        if (sfield.IndexOf(" as ", StringComparison.CurrentCultureIgnoreCase) > -1)
-                        {
-                            sb.Append(sfield);
-                        }
-                        else
-                        {
-                            sb.Append(sfield);
-                            sb.Append(" as ");
-                            if (field.Property != null)
-                            {
-                                sb.Append(Provider.QuotePrefix);
-                                sb.Append(ObjectName(field.Property.Name));
-                                sb.Append(Provider.QuoteSuffix);
-                            }
-                            else
-                            {
-                                sb.Append(field.Name);
-                            }
-                        }
-                    }
-                    else
-                    {
-                        index = sfield.IndexOf(' ');
-                        if (index == -1) index = sfield.IndexOf('.');
-                        if (index == -1)
-                        {
-                            sb.Append(Provider.QuotePrefix);
-                            sb.Append(ObjectName(sfield));
-                            sb.Append(Provider.QuoteSuffix);
-                        }
-                        else
-                        {
-                            sb.Append(sfield);
-                        }
-                    }
+                    sb.Append(",");
                 }
-            }
+                else
+                {
+                    IsMush = true;
+                }
+                sb.Append(Provider.QuotePrefix);
+                sb.Append(ObjectName(field));
+                sb.Append(Provider.QuoteSuffix);
+            });
 
-            sb.AppendFormat(" FROM {0} ", TableInfo.Name);
+            sb.AppendFormat(" FROM {0} ", TableName);
 
             return sb.ToString();
-        }
-        public bool IsClearIndex
-        {
-            get;
-            set;
-
-        }
-        void SetIndex(System.Data.IDataReader dr)
-        {
-            var list = new List<string>();
-            for (var i = 0; i < dr.FieldCount; i++)
-            {
-                list.Add(dr.GetName(i).ToLower());
-            }
-            for (int i = 0; i < Fields.Count; i++)
-            {
-                Fields[i].FieldIndex = list.FindIndex(s => Fields[i].Attribute.Field.ToLower() == s);
-            }
-            IsClearIndex = true;
         }
         /// <summary>
         /// 创建实体更新脚本
         /// </summary>
         /// <returns></returns>
-        string GetUpdateText(object entity, string format)
+        public string CreateUpdateText<T>(T entity, string format) where T : Record, new()
         {
             if (String.IsNullOrEmpty(format))
             {
                 format = "{1}";
             }
             StringBuilder sb = new StringBuilder();
-            sb.AppendFormat(" UPDATE {0} SET  ", TableInfo.Name);
+            sb.AppendFormat(" UPDATE {0} SET  ", TableName);
 
             bool IsMush = false;
-
-            for (int i = 0; i < Fields.Count; i++)
+            
+            entity.GetValues((key, value) =>
             {
-                var fd = Fields[i];
-                if (fd.Attribute.Update)
+                if (IsMush)
                 {
-                    if (fd.Property == null)
-                    {
-                        continue;
-                    }
-
-                    var value = fd.Property.GetValue(entity, null) ?? null;
-                    if (value == null)
-                    {
-                        continue;
-                    }
-                    if (IsMush)
-                    {
-                        sb.Append(",");
-                    }
-                    else
-                    {
-                        IsMush = true;
-                    }
-                    var Field = Provider.QuotePrefix + ObjectName(Fields[i].Attribute.Field) + Provider.QuoteSuffix;
-                    var Value = "{" + this.Arguments.Count + "}";
-                    sb.Append(Field);
-                    sb.Append('=');
-
-                    sb.AppendFormat(format, Field, Value);
-
-
-                    this.Arguments.Add(this.GetArgumentValue(value, Fields[i].Property));
-
-
+                    sb.Append(",");
                 }
-            }
+                else
+                {
+                    IsMush = true;
+                }
+                var Field = Provider.QuotePrefix + ObjectName(key) + Provider.QuoteSuffix;
+                var Value = "{" + this.Arguments.Count + "}";
+                sb.Append(Field);
+                sb.Append('=');
+
+                sb.AppendFormat(format, Field, Value);
+
+
+                this.Arguments.Add(value);
+
+
+            });
             return sb.ToString();
         }
 
@@ -362,44 +212,28 @@ namespace UMC.Data.Sql
         /// 创建实体更新脚本
         /// </summary>
         /// <returns></returns>
-        public string AppendUpdateText(StringBuilder sb, object entity, string format)
+        public string AppendUpdateText<T>(StringBuilder sb, T entity, string format) where T : Record, new()
         {
             if (String.IsNullOrEmpty(format))
             {
                 format = "{1}";
             }
-
-            for (int i = 0; i < Fields.Count; i++)
+            entity.GetValues((key, value) =>
             {
-                var fd = Fields[i];
-                if (fd.Attribute.Update)
-                {
-                    if (fd.Property == null)
-                    {
-                        continue;
-                    }
+                sb.Append(",");
 
-                    var value = fd.Property.GetValue(entity, null) ?? null;
-                    if (value == null)
-                    {
-                        continue;
-                    }
+                var Field = Provider.QuotePrefix + ObjectName(key) + Provider.QuoteSuffix;
+                var Value = "{" + this.Arguments.Count + "}";
+                sb.Append(Field);
+                sb.Append('=');
 
-                    sb.Append(",");
-
-                    var Field = Provider.QuotePrefix + ObjectName(Fields[i].Attribute.Field) + Provider.QuoteSuffix;
-                    var Value = "{" + this.Arguments.Count + "}";
-                    sb.Append(Field);
-                    sb.Append('=');
-
-                    sb.AppendFormat(format, Field, Value);
+                sb.AppendFormat(format, Field, Value);
 
 
-                    this.Arguments.Add(this.GetArgumentValue(value, Fields[i].Property));
+                this.Arguments.Add(value);
 
 
-                }
-            }
+            });
             return sb.ToString();
         }
 
@@ -414,7 +248,7 @@ namespace UMC.Data.Sql
 
             this.Arguments.Clear();
             StringBuilder sb = new StringBuilder();
-            sb.AppendFormat(" UPDATE {0} SET  ", TableInfo.Name);
+            sb.AppendFormat(" UPDATE {0} SET  ", TableName);
 
             var f = fieldValues.GetEnumerator();
             bool IsMush = false;
@@ -441,183 +275,7 @@ namespace UMC.Data.Sql
 
             return sb.ToString();
         }
-        object GetArgumentValue(object value, System.Reflection.PropertyInfo protype)
-        {
-            if (protype.GetCustomAttributes(typeof(JSONAttribute), true).Length > 0
-                ||
-                protype.PropertyType.GetCustomAttributes(typeof(JSONAttribute), true).Length > 0)
-            {
-                return JSON.Serialize(value, true);
-            }
-            else
-            {
-                return value;
-            }
-        }
-        public string CreateUpdateText(string format, object entity, params string[] proNames)
-        {
-            if (String.IsNullOrEmpty(format))
-            {
-                format = "{1}";
-            }
-            this.Arguments.Clear();
-            if (proNames.Length == 0)
-            {
-                return GetUpdateText(entity, format);
-            }
-            List<String> strs = new List<string>(proNames);
 
-            StringBuilder sb = new StringBuilder();
-            sb.AppendFormat(" UPDATE {0} SET  ", TableInfo.Name);
-
-            bool IsMush = false;
-
-            for (int i = 0; i < Fields.Count; i++)
-            {
-                if (Fields[i].Attribute.Update && strs.Exists(str => str.ToLower() == Fields[i].Property.Name.ToLower()))
-                {
-                    if (IsMush)
-                    {
-                        sb.Append(",");
-                    }
-
-                    else
-                    {
-                        IsMush = true;
-                    }
-                    var Field = Provider.QuotePrefix + ObjectName(Fields[i].Attribute.Field) + Provider.QuoteSuffix;
-                    var Value = "{" + this.Arguments.Count + "}";
-
-                    sb.Append(Field);
-                    sb.Append('=');
-
-                    sb.AppendFormat(format, Field, Value);
-
-                    this.Arguments.Add(GetArgumentValue(entity, Fields[i].Property) ?? DBNull.Value);
-                }
-            }
-            return sb.ToString();
-        }
-
-
-        public static void SetValue(object obvalue, System.Reflection.PropertyInfo objPropertyInfo, object drObj)
-        {
-            if (drObj != null)
-            {
-
-                if (drObj == DBNull.Value)
-                {
-                    return;
-                }
-
-                Type proType = objPropertyInfo.PropertyType;
-                if (proType.IsEnum)
-                {
-                    objPropertyInfo.SetValue(obvalue, Enum.ToObject(proType, drObj), null);
-                }
-                else if (proType.IsGenericType)
-                {
-                    if (CBO.Nullable == proType.GetGenericTypeDefinition())
-                    {
-                        var ndType = proType.GetGenericArguments()[0];
-                        if (ndType.IsEnum)
-                        {
-                            if (drObj is string)
-                            {
-                                objPropertyInfo.SetValue(obvalue, Enum.Parse(ndType, drObj as string), null);
-                            }
-                            else
-                            {
-                                objPropertyInfo.SetValue(obvalue, Enum.ToObject(ndType, drObj), null);
-                            }
-                        }
-                        else if (drObj is string)
-                        {
-                            objPropertyInfo.SetValue(obvalue, UMC.Data.Reflection.Parse(drObj as string, ndType), null);
-                        }
-                        else if (ndType == typeof(DateTime))
-                        {
-                            if (drObj is DateTime)
-                            {
-                                objPropertyInfo.SetValue(obvalue, drObj, null);
-                            }
-                            else
-                            { 
-                                objPropertyInfo.SetValue(obvalue, Reflection.TimeSpan(Convert.ToInt32(drObj)), null);
-                            }
-                        }
-                        else
-                        {
-                            objPropertyInfo.SetValue(obvalue, Convert.ChangeType(drObj, ndType), null);
-                        }
-                    }
-
-                }
-                else
-                {
-                    if (drObj is string)
-                    {
-                        if (objPropertyInfo.GetCustomAttributes(typeof(JSONAttribute), true).Length > 0
-                            ||
-                            objPropertyInfo.PropertyType.GetCustomAttributes(typeof(JSONAttribute), true).Length > 0)
-                        {
-                            var str = (string)drObj;
-                            if (String.IsNullOrEmpty(str) == false)
-                            {
-                                objPropertyInfo.SetValue(obvalue, JSON.Deserialize(str, proType), null);
-                            }
-                        }
-                        else if (proType == typeof(String))
-                        {
-                            objPropertyInfo.SetValue(obvalue, drObj);
-                        }
-                        else
-                        {
-                            objPropertyInfo.SetValue(obvalue, UMC.Data.Reflection.Parse(drObj as string, proType));
-                        }
-                    }
-                    else if (proType == typeof(String))
-                    {
-                        objPropertyInfo.SetValue(obvalue, drObj.ToString(), null);
-                    }
-                    else
-                    {
-                        objPropertyInfo.SetValue(obvalue, Convert.ChangeType(drObj, proType), null);
-                    }
-                }
-
-            }
-        }
-
-        public Object CreateObject(object obvalue, System.Data.IDataReader dr)
-        {
-            if (IsClearIndex == false)
-            {
-                SetIndex(dr);
-            }
-
-            for (int i = 0; i < this.Fields.Count; i++)
-            {
-                var proField = this.Fields[i];
-                var objPropertyInfo = proField.Property;
-
-                if (proField.Attribute.Select)
-                {
-
-                    var fIndex = proField.FieldIndex;
-                    if (fIndex == -1)
-                    {
-                        continue;
-                    }
-
-                    if (objPropertyInfo.CanWrite)
-                    {
-                        SetValue(obvalue, objPropertyInfo, dr[fIndex]);
-                    }
-                }
-            }
-            return obvalue;
-        }
 
     }
 }

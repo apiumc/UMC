@@ -8,7 +8,7 @@ namespace UMC.Data.Sql
     /// 实体操作
     /// </summary>
     /// <typeparam name="T">实体类型</typeparam>
-    public interface IObjectEntity<T> : IScript where T : class
+    public interface IObjectEntity<T> : IScript where T : Record, new()
     {
         /// <summary>
         /// 创建查询脚本
@@ -96,10 +96,6 @@ namespace UMC.Data.Sql
         /// <returns></returns>
         object[] Query(string field);
 
-        /// <summary>
-        /// 增加查询列
-        /// </summary>
-        void AddField(string field, string name);
 
 
         /// <summary>

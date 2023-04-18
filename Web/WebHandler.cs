@@ -82,7 +82,7 @@ namespace UMC.Web
         /// <summary>
         /// 单值对话框
         /// </summary>
-        protected string AsyncDialog(string asyncId, AsyncDialogCallback callback, bool isDialog)
+        protected string AsyncDialog(string asyncId, Func<String, UIDialog> callback, bool isDialog)
         {
             return AsyncDialog(asyncId, callback, isDialog);
         }
@@ -106,21 +106,30 @@ namespace UMC.Web
         /// <param name="asyncId"></param>
         /// <param name="callback"></param>
         /// <returns></returns>
-        protected string AsyncDialog(string asyncId, UMC.Web.AsyncDialogCallback callback)
+        protected string AsyncDialog(string asyncId, Func<String, UIDialog> callback)
         {
             return UMC.Web.UIDialog.AsyncDialog(this.Context, asyncId, callback);
+        }
+        protected string AsyncDialog(string asyncId, Action<String> action)
+        {
+            return UMC.Web.UIDialog.AsyncDialog(this.Context, asyncId, (a) =>
+            {
+                action(a);
+                this.Context.End();
+                return this.DialogValue("none");
+            });
         }
         /// <summary>
         /// 表单对话框
         /// </summary>
-        protected WebMeta AsyncDialog(UMC.Web.AsyncDialogFormCallback callback, string asyncId)
+        protected WebMeta AsyncDialog(Func<String, UIFormDialog> callback, string asyncId)
         {
             return UIFormDialog.AsyncDialog(this.Context, asyncId, d => callback(asyncId));
         }
         /// <summary>
         /// 表单对话框
         /// </summary>
-        protected WebMeta AsyncDialog(string asyncId, UMC.Web.AsyncDialogFormCallback callback)
+        protected WebMeta AsyncDialog(string asyncId, Func<String, UIFormDialog> callback)
         {
             return UIFormDialog.AsyncDialog(this.Context, asyncId, d => callback(asyncId));
         }

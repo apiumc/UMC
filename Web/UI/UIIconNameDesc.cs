@@ -68,19 +68,19 @@ namespace UMC.Web.UI
                 this.data.Put("items", ns);
             this.Type = "IconNameDesc";
         }
+        public UIIconNameDesc Button(string name)
+        {
+            this.data.Put("button", name);
+            return this;
+        }
         public UIIconNameDesc Button(string name, UIClick click, int color)
         {
 
             this.data.Put("button-click", click);
             this.data.Put("button", name);
-            this.Style.Name("button").BgColor(color);
-            if (color < 0x1000)
+            if (color > 0)
             {
-                data.Put("button-color", String.Format("#{0:x3}", color));
-            }
-            else
-            {
-                data.Put("button-color", String.Format("#{0:x6}", color));
+                this.Style.Name("button").BgColor(color);
             }
             return this;
         }

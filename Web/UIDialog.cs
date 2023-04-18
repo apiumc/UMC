@@ -7,18 +7,7 @@ using System.Collections.Specialized;
 
 namespace UMC.Web
 {
-
-    /// <summary>
-    /// 异步单值对话框，回调产生的对话框
-    /// </summary>
-    /// <returns></returns>
-    public delegate UIDialog AsyncDialogCallback(string asyncId);
-
-    /// <summary>
-    /// 异步多值调对话框，回调产生的对话框
-    /// </summary>
-    /// <returns></returns>
-    public delegate UIFormDialog AsyncDialogFormCallback(string asyncId);
+ 
 
     /// <summary>
     /// 对话框
@@ -26,7 +15,7 @@ namespace UMC.Web
     public abstract class UIDialog
     {
 
-        class POSFromValue : UIFormDialog
+        class UIFromValue : UIFormDialog
         {
             protected override string DialogType
             {
@@ -40,7 +29,7 @@ namespace UMC.Web
                 set;
             }
         }
-        class POSDialogValue : UIDialog
+        class UIDialogValue : UIDialog
         {
             public string InputValue
             {
@@ -52,14 +41,9 @@ namespace UMC.Web
                 get { throw new NotImplementedException(); }
             }
         }
-        class APOSDialog : UIDialog
+        class Dialog : UIDialog
         {
-            //public object Values
-            //{
-            //    get;
-            //    set;
-            //}
-            public APOSDialog(string type)
+            public Dialog(string type)
             {
                 this._DType = type;
             }
@@ -69,10 +53,10 @@ namespace UMC.Web
                 get { return _DType; }
             }
         }
-        class aGridDialog : UIGridDialog
+        class GridDialog : UIGridDialog
         {
             Header header;
-            public aGridDialog(Header header, object data)
+            public GridDialog(Header header, object data)
             {
                 this.IsAsyncData = true;
                 this.header = header;
@@ -92,27 +76,27 @@ namespace UMC.Web
         }
         public static UIGridDialog Create(UIGridDialog.Header header, System.Data.DataTable data, bool isReturn)
         {
-            return new aGridDialog(header, data) { IsReturnValue = isReturn };
+            return new GridDialog(header, data) { IsReturnValue = isReturn };
         }
         public static UIGridDialog Create(UIGridDialog.Header header, Array data, bool isReturn)
         {
-            return new aGridDialog(header, data) { IsReturnValue = isReturn };
+            return new GridDialog(header, data) { IsReturnValue = isReturn };
         }
         public static UIGridDialog Create(UIGridDialog.Header header, System.Data.DataTable data)
         {
-            return new aGridDialog(header, data);
+            return new GridDialog(header, data);
         }
         public static UIGridDialog Create(UIGridDialog.Header header, Array data)
         {
-            return new aGridDialog(header, data);
+            return new GridDialog(header, data);
         }
         public static UIDialog CreateDialog(string type)
         {
-            return new APOSDialog(type);
+            return new Dialog(type);
         }
         public static UIDialog CreateImage(string title, Uri uri, string tip)
         {
-            var p = new APOSDialog("Image");
+            var p = new Dialog("Image");
             p.Title = title;
             p.Config["Url"] = uri.AbsoluteUri;
             if (String.IsNullOrEmpty(tip) == false)
@@ -143,7 +127,7 @@ namespace UMC.Web
         /// <returns></returns>
         public static UIDialog ReturnValue(string value)
         {
-            var v = new POSDialogValue();
+            var v = new UIDialogValue();
 
             v.InputValue = value as string;
             return v;
@@ -156,14 +140,14 @@ namespace UMC.Web
         /// <returns></returns>
         public static UIFormDialog ReturnValue(WebMeta value)
         {
-            var v = new POSFromValue();
+            var v = new UIFromValue();
 
             v.InputValues = value as WebMeta;
 
             return v;
 
         }
-        const string Dialog = "Dialog";
+        //const string Dialog = "Dialog";
         /// <summary>
         /// 对话框类型
         /// </summary>
@@ -236,16 +220,17 @@ namespace UMC.Web
         /// </summary>
         /// <param name="asyncId">异步值Id</param>
         /// <param name="callback">对话框回调方法</param>
-        public static string AsyncDialog(WebContext context, string asyncId, AsyncDialogCallback callback)
+        public static string AsyncDialog(WebContext context, string asyncId, Func<String, UIDialog> callback )
         {
             return GetAsyncValue(context, asyncId, true, callback, false) as string;
         }
-        public static string AsyncDialog(WebContext context, string asyncId, AsyncDialogCallback callback, bool IsDialogValue)
+
+        public static string AsyncDialog(WebContext context, string asyncId, Func<String, UIDialog> callback , bool IsDialogValue)
         {
             return GetAsyncValue(context, asyncId, true, callback, IsDialogValue) as string;
         }
         internal const string KEY_DIALOG_ID = "KEY_DIALOG_ID";
-        protected static object GetAsyncValue(WebContext context, string asyncId, bool singleValue, AsyncDialogCallback callback, bool IsDialog)
+        protected static object GetAsyncValue(WebContext context, string asyncId, bool singleValue, Func<String, UIDialog> callback, bool IsDialog)
         {
             var request = context.Request;
             var response = context.Response;
@@ -275,9 +260,9 @@ namespace UMC.Web
                 }
                 var dialog = callback(asyncId);
                 dialog.AsyncId = asyncId;
-                if (dialog is POSDialogValue)
+                if (dialog is UIDialogValue)
                 {
-                    var dv = dialog as POSDialogValue;
+                    var dv = dialog as UIDialogValue;
                     request.Arguments[(asyncId)] = dv.InputValue;
                     return dv.InputValue;
                 }
@@ -301,7 +286,7 @@ namespace UMC.Web
                                 rValue = UMC.Data.JSON.Deserialize<WebMeta>(sVal);
                                 if (rValue != null)
                                 {
-                                    request.Arguments.Set(asyncId, rValue);
+                                    request.Arguments[asyncId] = sVal;
                                     mvs.Remove(asyncId);
                                     return rValue;
                                 }
@@ -311,7 +296,7 @@ namespace UMC.Web
                         {
                             rValue = mvs;
                             mvs.Remove(KEY_DIALOG_ID);
-                            request.Arguments.Set(asyncId, rValue);
+                            request.Arguments[asyncId] = UMC.Data.JSON.Serialize(mvs);
                             request.Headers.Remove(request.Model);
                             return rValue;
                         }
@@ -319,10 +304,11 @@ namespace UMC.Web
                     }
                     var dialog = callback(asyncId);
                     dialog.AsyncId = asyncId;
-                    if (dialog is POSFromValue)
+                    if (dialog is UIFromValue)
                     {
-                        var dfv = dialog as POSFromValue;
-                        request.Arguments.Set(asyncId, dfv.InputValues);
+                        var dfv = dialog as UIFromValue;
+                        request.Arguments[asyncId] = UMC.Data.JSON.Serialize(dfv.InputValues);
+
                         return dfv.InputValues;
                     }
                     response.RedirectDialog(dialog);

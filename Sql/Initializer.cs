@@ -1,4 +1,5 @@
-﻿using System;
+﻿using System.Linq;
+using System;
 using System.Collections.Generic;
 using System.Text;
 using System.IO;
@@ -8,23 +9,31 @@ namespace UMC.Data.Sql
 {
     public abstract class Initializer
     {
-        public static Initializer[] Initializers()
+
+        class EqualityComparer : IEqualityComparer<Initializer>
         {
 
-            List<Initializer> its = new List<Initializer>();
-
-
-            var Setup = Reflection.Configuration("setup") ?? new ProviderConfiguration();
-            for (var i = 0; i < Setup.Count; i++)
+            public bool Equals(Initializer x, Initializer y)
             {
-                var v = Reflection.CreateObject(Setup[i]) as Initializer;
-                if (v != null)
-                {
-                    its.Add(v);
-                }
+                return StringComparer.CurrentCulture.Equals(x.Name, y.Name);
+
             }
-            return its.ToArray();
+
+            public int GetHashCode(Initializer obj)
+            {
+                return obj.GetHashCode();
+            }
         }
+        static HashSet<Initializer> _Initializers = new HashSet<Initializer>(new EqualityComparer());
+
+        public static HashSet<Initializer> Initializers
+        {
+            get
+            {
+                return _Initializers;
+            }
+        }
+
 
         public abstract string Name
         {
@@ -34,15 +43,36 @@ namespace UMC.Data.Sql
         {
             get;
         }
-        public static void Register(Initializer initializer)
-        {
 
+        public static ProviderConfiguration Register(params Initializer[] initializers)
+        {
             var Setup = Reflection.Configuration("setup") ?? new ProviderConfiguration();
-            if (Setup.Providers.ContainsKey(initializer.Name) == false)
+            foreach (var initializer in initializers)
             {
-                Setup.Providers[initializer.Name] = UMC.Data.Provider.Create(initializer.Name, initializer.GetType().FullName);
+                _Initializers.Add(initializer);
+                if (Setup.ContainsKey(initializer.Name) == false)
+                {
+                    Setup.Add(UMC.Data.Provider.Create(initializer.Name, initializer.GetType().FullName));
+                }
             }
-            Reflection.Configuration("setup", Setup);
+            
+            var isSetup = false;
+            foreach (var init in initializers)
+            {
+                var setuper = Setup[init.Name];
+                if (String.Equals(setuper.Attributes["setup"], "true") == false)
+                {
+                    isSetup = true;
+                    init.Setup(new UMC.Data.CSV.Log($"安装{init.Caption}"));
+                    setuper.Attributes["setup"] = "true";
+                }
+            }
+            if (isSetup)
+            {
+                Reflection.Configuration("setup", Setup);
+            }
+            
+            return Setup;
         }
 
         public virtual string ProviderName => String.Empty;
@@ -60,28 +90,28 @@ namespace UMC.Data.Sql
         }
 
 
-        private IDictionary<Object, Object> dictionary = new Dictionary<Object, Object>();
-        private List<Type> _copy = new List<Type>();
+        private IDictionary<Record, string[]> dictionary = new Dictionary<Record, string[]>();
+        private List<Record> _copy = new List<Record>();
         /// <summary>
         /// 主键
         /// </summary>
         /// <typeparam name="T"></typeparam>
         /// <param name="key"></param>
-        protected void Setup<T>(T key)
+        protected void Setup(Record key) //where T : Record
         {
             dictionary.Add(key, null);
         }
-        protected void Setup<T>(T key, T text)
+        protected void Setup(Record key, Record text)//where T : Record
         {
-            dictionary.Add(key, text);
+            dictionary.Add(key, GetValues(text).Keys.ToArray());
 
         }
-        protected void Setup<T>(T key, params string[] fields)
+        protected void Setup(Record key, params string[] fields)//where T : Record
         {
             dictionary.Add(key, fields);
 
         }
-        protected void Copy(Type type)
+        protected void Copy(Record type)
         {
             _copy.Add(type);
 
@@ -187,30 +217,26 @@ namespace UMC.Data.Sql
 
             while (em.MoveNext())
             {
-                var value = em.Current.Value;
                 CreateTable(target.Sqler(), sqlite, log, em.Current.Key, em.Current.Value);
                 var tabName = em.Current.Key.GetType().Name;
-                //log.Info("备份表", tabName);
+
                 var fields = new List<String>(); ;
                 var insertSql = new StringBuilder();
                 insertSql.Append("INSERT INTO ");
                 insertSql.Append(tabName);
                 insertSql.Append("(");
-                foreach (var f in em.Current.Key.GetType().GetProperties())
+                foreach (var f in em.Current.Key.GetColumns())
                 {
                     insertSql.AppendFormat("{0}{1}{2},", sqlite.QuotePrefix, f.Name, sqlite.QuoteSuffix);
                     fields.Add(f.Name);
                 }
+                var value = em.Current.Value;
                 if (value != null)
                 {
-                    if (value.GetType().IsArray)
+                    foreach (var f in value)
                     {
-                        var fs = (string[])value;
-                        foreach (var f in fs)
-                        {
-                            insertSql.AppendFormat("{0}{1}{2},", sqlite.QuotePrefix, f, sqlite.QuoteSuffix);
-                            fields.Add(f);
-                        }
+                        insertSql.AppendFormat("{0}{1}{2},", sqlite.QuotePrefix, f, sqlite.QuoteSuffix);
+                        fields.Add(f);
                     }
                 }
                 insertSql.Remove(insertSql.Length - 1, 1);
@@ -351,7 +377,7 @@ namespace UMC.Data.Sql
             var sqler = new DbFactory(provider).Sqler(0, false);
             foreach (var type in _copy)
             {
-                var tabName = provider.Builder.Column(type.Name);
+                var tabName = provider.Builder.Column(type.GetType().Name);
                 log.Info("复制表", tabName);
                 var sName = tabName;
                 var Delimiter = provider.Delimiter;
@@ -376,7 +402,7 @@ namespace UMC.Data.Sql
                 }
 
                 var sb = new StringBuilder();
-                var ps = type.GetProperties();
+                var ps = type.GetColumns();
                 foreach (var property in ps)
                 {
                     sb.AppendFormat("{0}{3}{1}", provider.QuotePrefix, provider.Prefixion, provider.QuoteSuffix, provider.Builder.Column(property.Name));
@@ -393,22 +419,13 @@ namespace UMC.Data.Sql
                 }
             }
         }
-        void CheckTable(ISqler sqler, DbProvider provider, CSV.Log log, Object key, object value)
+        void CheckTable(ISqler sqler, DbProvider provider, CSV.Log log, Record key, string[] textFields)
         {
 
 
             var tabName = key.GetType().Name;
             log.Info("检测表", tabName);
 
-            IDictionary<string, object> textKeys = new Dictionary<string, object>();
-            if (value != null)
-            {
-                if (value.GetType().IsArray == false)
-                {
-                    textKeys = CBO.GetProperty(value);
-                }
-
-            }
             var builder = provider.Builder;
 
 
@@ -425,11 +442,11 @@ namespace UMC.Data.Sql
             }
             if (builder.Check(checkName, sqler) == false)
             {
-                CreateTable(sqler, provider, log, key, value);
+                CreateTable(sqler, provider, log, key, textFields);
             }
             else
             {
-                var ps = key.GetType().GetProperties();
+                var ps = key.GetColumns();
                 foreach (var property in ps)
                 {
                     var filed = String.Format("{0}{2}{1} ", provider.QuotePrefix, provider.QuoteSuffix, builder.Column(property.Name));
@@ -447,11 +464,7 @@ namespace UMC.Data.Sql
                     if (builder.Check(checkName.Trim(), checkField.Trim(), sqler) == false)
                     {
                         var sb = new StringBuilder();
-                        var type = property.PropertyType;
-                        if (type.IsGenericType)
-                        {
-                            type = type.GetGenericArguments()[0];
-                        }
+                        var type = property.Type;
                         switch (type.FullName)
                         {
                             case "System.SByte":
@@ -489,7 +502,7 @@ namespace UMC.Data.Sql
                                 {
                                     sb.Append(builder.AddColumn(tabName, cfiled, builder.Binary()));
                                 }
-                                else if (textKeys.ContainsKey(property.Name))
+                                else if (textFields.Contains(property.Name))
                                 {
 
                                     sb.Append(builder.AddColumn(tabName, cfiled, builder.Text()));
@@ -504,34 +517,6 @@ namespace UMC.Data.Sql
                         {
                             log.Info("追加表字段", tabName + '.' + cfiled);
                             ExecuteNonQuery(log, sqler, sb.ToString());
-                        }
-                    }
-                }
-                if (value != null)
-                {
-                    if (value.GetType().IsArray)
-                    {
-                        var fs = (string[])value;
-                        foreach (var f in fs)
-                        {
-
-                            var filed = builder.Column(String.Format("{0}{2}{1} ", provider.QuotePrefix, provider.QuoteSuffix, f));
-
-                            var checkField = filed;
-                            if (String.IsNullOrEmpty(provider.QuotePrefix) == false)
-                            {
-                                checkField = checkField.Replace(provider.QuotePrefix, "");
-                            }
-                            if (String.IsNullOrEmpty(provider.QuoteSuffix) == false)
-                            {
-                                checkField = checkField.Replace(provider.QuoteSuffix, "");
-                            }
-
-                            if (builder.Check(checkName.Trim(), checkField.Trim(), sqler) == false)
-                            {
-                                log.Info("追加表字段", tabName + '.' + filed);
-                                ExecuteNonQuery(log, sqler, builder.AddColumn(tabName, filed, builder.String()));
-                            }
                         }
                     }
                 }
@@ -552,27 +537,25 @@ namespace UMC.Data.Sql
 
 
         }
-        public static void Create<T>(Database database, T key, T value)
+        static Dictionary<String, Object> GetValues(Record record)
         {
-            CreateTable(database.Sqler(), database.DbProvider, new CSV.Log(typeof(T).Name), key, value);
+            var vs = new Dictionary<String, Object>();
+            record.GetValues((t, v) => vs.Add(t, v));
+            return vs;
         }
-        static void CreateTable(ISqler sqler, DbProvider provider, CSV.Log log, Object key, object value)
+        public static void Create(Database database, Record key, Record value)
+        {
+            CreateTable(database.Sqler(), database.DbProvider, new CSV.Log(key.GetType().Name), key, GetValues(value).Keys.ToArray());
+        }
+        static void CreateTable(ISqler sqler, DbProvider provider, CSV.Log log, Record key, string[] textFeilds)
         {
 
 
             var tabName = key.GetType().Name;
             log.Info("创建表", tabName);
 
-            var keys = CBO.GetProperty(key);
-            IDictionary<string, object> textKeys = new Dictionary<string, object>();
-            if (value != null)
-            {
-                if (value.GetType().IsArray == false)
-                {
-                    textKeys = CBO.GetProperty(value);
-                }
+            var keys = GetValues(key);
 
-            }
             var Delimiter = provider.Delimiter;
             var builder = provider.Builder;
 
@@ -604,17 +587,14 @@ namespace UMC.Data.Sql
             sb.Append("CREATE TABLE ");
             sb.Append(tabName);
             sb.Append("(");
-            var ps = key.GetType().GetProperties();
+            var ps = key.GetColumns();
             foreach (var property in ps)
             {
                 var filed = String.Format("{0}{2}{1} ", provider.QuotePrefix, provider.QuoteSuffix, property.Name);
 
                 sb.Append(builder.Column(filed));
-                var type = property.PropertyType;
-                if (type.IsGenericType)
-                {
-                    type = type.GetGenericArguments()[0];
-                }
+                var type = property.Type;
+
                 switch (type.FullName)
                 {
                     case "System.SByte":
@@ -645,7 +625,7 @@ namespace UMC.Data.Sql
                         break;
                     default:
 
-                        if (property.PropertyType.IsEnum)
+                        if (property.Type.IsEnum)
                         {
                             sb.Append(builder.Integer());
                         }
@@ -653,7 +633,7 @@ namespace UMC.Data.Sql
                         {
                             sb.Append(builder.Binary());
                         }
-                        else if (textKeys.ContainsKey(property.Name))
+                        else if (textFeilds.Contains(property.Name))
                         {
 
                             sb.Append(builder.Text());
@@ -669,21 +649,6 @@ namespace UMC.Data.Sql
                     sb.Append(" NOT NULL");
                 }
                 sb.Append(",");
-            }
-            if (value != null)
-            {
-                if (value.GetType().IsArray)
-                {
-                    var fs = (string[])value;
-                    foreach (var f in fs)
-                    {
-
-                        var filed = String.Format("{0}{2}{1} ", provider.QuotePrefix, provider.QuoteSuffix, f);
-                        sb.Append(builder.Column(filed));
-                        sb.Append(builder.String());
-                        sb.Append(",");
-                    }
-                }
             }
             sb.Remove(sb.Length - 1, 1);
 
@@ -760,7 +725,6 @@ namespace UMC.Data.Sql
             }
 
         }
-
     }
 
 }

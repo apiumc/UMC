@@ -24,19 +24,23 @@ namespace UMC.Web
             return UICell.Create("Cell", new WebMeta().Put("value", value, "text", text).Put("click", click));
 
         }
-        public static UICell UI(String text, String value, string click)
-        {
-            return UICell.Create("Cell", new WebMeta().Put("value", value, "text", text).Put("click", click));
-
-        }
         public static UICell UI(String text, UIClick click)
         {
             return UICell.Create("Cell", new WebMeta().Put("text", text).Put("click", click));
-
         }
         public static UICell UI(String text, String value)
         {
             return UICell.Create("Cell", new WebMeta().Put("value", value, "text", text));
+
+        }
+        public static UICell UI(string name, String text, String value, UIClick click)
+        {
+            return UICell.Create("TextNameValue", new WebMeta().Put("value", value, "text", text, "name", name).Put("click", click));
+
+        }
+        public static UICell UI(string name, String text, String value)
+        {
+            return UICell.Create("TextNameValue", new WebMeta().Put("value", value, "text", text, "name", name));
 
         }
         public static UICell UI(char icon, String text, String value)

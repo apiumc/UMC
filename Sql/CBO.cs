@@ -9,40 +9,106 @@ using System.Text;
 using System.IO;
 namespace UMC.Data.Sql
 {
-    class CBO
+    static class CBO
     {
-        public static IDictionary<string, object> GetProperty(object obj)
+        public static void SetValue(object obvalue, System.Reflection.PropertyInfo objPropertyInfo, object drObj)
         {
-            var dic = new Dictionary<string, object>();
-            if (obj != null)
-            { 
-                var cache = obj.GetType().GetProperties();
-                foreach (PropertyInfo info in cache)
+            if (drObj != null)
+            {
+
+                if (drObj == DBNull.Value)
                 {
-                    if (info.CanRead)
+                    return;
+                }
+
+                Type proType = objPropertyInfo.PropertyType;
+                if (proType.IsEnum)
+                {
+                    objPropertyInfo.SetValue(obvalue, Enum.ToObject(proType, drObj), null);
+                }
+                else if (proType.IsGenericType)
+                {
+                    if (CBO.Nullable == proType.GetGenericTypeDefinition())
                     {
-                        var value = info.GetValue(obj, null) ?? null; 
-                        if (value != null)
+                        var ndType = proType.GetGenericArguments()[0];
+                        if (ndType.IsEnum)
                         {
-                            dic.Add(info.Name, value);
+                            if (drObj is string)
+                            {
+                                objPropertyInfo.SetValue(obvalue, Enum.Parse(ndType, drObj as string), null);
+                            }
+                            else
+                            {
+                                objPropertyInfo.SetValue(obvalue, Enum.ToObject(ndType, drObj), null);
+                            }
+                        }
+                        else if (drObj is string)
+                        {
+                            objPropertyInfo.SetValue(obvalue, UMC.Data.Reflection.Parse(drObj as string, ndType), null);
+                        }
+                        else if (ndType == typeof(DateTime))
+                        {
+                            if (drObj is DateTime)
+                            {
+                                objPropertyInfo.SetValue(obvalue, drObj, null);
+                            }
+                            else
+                            {
+                                objPropertyInfo.SetValue(obvalue, Reflection.TimeSpan(Convert.ToInt32(drObj)), null);
+                            }
+                        }
+                        else
+                        {
+                            objPropertyInfo.SetValue(obvalue, Convert.ChangeType(drObj, ndType), null);
                         }
                     }
 
                 }
-            }
+                else
+                {
+                    if (drObj is string)
+                    {
+                        if (objPropertyInfo.GetCustomAttributes(typeof(JSONAttribute), true).Length > 0
+                            ||
+                            objPropertyInfo.PropertyType.GetCustomAttributes(typeof(JSONAttribute), true).Length > 0)
+                        {
+                            var str = (string)drObj;
+                            if (String.IsNullOrEmpty(str) == false)
+                            {
+                                objPropertyInfo.SetValue(obvalue, JSON.Deserialize(str, proType), null);
+                            }
+                        }
+                        else if (proType == typeof(String))
+                        {
+                            objPropertyInfo.SetValue(obvalue, drObj);
+                        }
+                        else
+                        {
+                            objPropertyInfo.SetValue(obvalue, UMC.Data.Reflection.Parse(drObj as string, proType));
+                        }
+                    }
+                    else if (proType == typeof(String))
+                    {
+                        objPropertyInfo.SetValue(obvalue, drObj.ToString(), null);
+                    }
+                    else
+                    {
+                        objPropertyInfo.SetValue(obvalue, Convert.ChangeType(drObj, proType), null);
+                    }
+                }
 
-            return dic;
+            }
         }
-        internal static T CreateObject<T>(EntityHelper sqltext, IDataReader dr)
+        internal static T CreateObject<T>(T tObj, IDataReader dr) where T : Record
         {
-            T tObj = Activator.CreateInstance<T>();
-            return (T)CreateObject(tObj, sqltext, dr);
+            for (var i = 0; i < dr.FieldCount; i++)
+            {
+                tObj.SetValue(dr.GetName(i), dr[i]);
+            }
+            return tObj;
         }
         internal static readonly Type Nullable = typeof(Nullable<>);
-        internal static Object CreateObject(object obvalue, EntityHelper sqltext, IDataReader dr)
-        {
-            return sqltext.CreateObject(obvalue, dr);
-        }
+        
     }
 
 

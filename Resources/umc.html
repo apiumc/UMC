@@ -12,19 +12,26 @@
     <link href="/css/icon.css" rel="stylesheet" type="text/css" />
     <link href="/css/umc.ui.css" rel="stylesheet" type="text/css" />
     <link href="/css/umc.css" rel="stylesheet" type="text/css" />
-    <script src="/js/umc.js"></script>
-    <script src="/js/umc.database.js"></script>
-    <script src="/js/umc.grid.js"></script>
-    <script src="/js/umc.ui.js"></script>
-    <script src="/js/umc.dialog.js"></script>
-    <script src="/js/umc.page.js"></script>
-    <script src="/js/umc.setup.js"></script>
+    <script src="/js/umc.js?v01"></script>
+    <script src="/js/umc.database.js?v01"></script>
+    <script src="/js/umc.grid.js?v01"></script>
+    <script src="/js/umc.ui.js?v01"></script>
+    <script src="/js/umc.dialog.js?v01"></script>
+    <script src="/js/umc.page.js?v01"></script>
+    <script src="/js/umc.setup.js?v01"></script>
     <style>
         .weui_mask {
             background-color: transparent !important;
         }
         body > div[ui] {
             box-shadow: -2px 0px 5px #88888888;
+        }
+
+        @media screen and (max-width: 560px) {
+            .wdk-dialog {
+                position: fixed;
+                width: 100% !important;
+            }
         }
     </style>
 
@@ -45,7 +52,6 @@
                         <script type="text/html">
                         <li class="left">
                             {text}<a class="el-tag {OK} el-tag--small" model="System" cmd="Setup">{Status}</a>
-                            
                         </li>
                         </script>
                     </ul>

@@ -132,11 +132,7 @@ namespace UMC.Data.Sql
         /// </summary>
         public void Close()
         {
-
-            if (conOpen != null)
-            {
-                conOpen.Close();
-            }
+            conOpen?.Close();
         }
         object CommandProgress(CommandRun cmdAcs)
         {
@@ -157,19 +153,17 @@ namespace UMC.Data.Sql
         /// 创建实体综合管理适配器
         /// </summary>
         /// <returns></returns>
-        public IObjectEntity<T> ObjectEntity<T>() where T : class
+        public IObjectEntity<T> ObjectEntity<T>() where T : Record, new()
         {
-            ObjectEntity<T> selecter = new ObjectEntity<T>(new Sqler(Provider, Progress, true), String.Empty);
-            return selecter;
+            return new ObjectEntity<T>(new Sqler(Provider, Progress, true), String.Empty);
         }
         /// <summary>
         /// 创建实体综合管理适配器
         /// </summary>
         /// <returns></returns>
-        public IObjectEntity<T> ObjectEntity<T>(string tabName) where T : class
+        public IObjectEntity<T> ObjectEntity<T>(string tabName) where T : Record, new()
         {
-            ObjectEntity<T> selecter = new ObjectEntity<T>(new Sqler(Provider, Progress), tabName);
-            return selecter;
+            return new ObjectEntity<T>(new Sqler(Provider, Progress), tabName);
         }
         /// <summary>
         /// 使用事务
@@ -230,14 +224,11 @@ namespace UMC.Data.Sql
 
         void IDisposable.Dispose()
         {
-            if (TranCmd != null)
-            {
-                TranCmd.Dispose();
-            }
-            if (conOpen != null)
-            {
-                conOpen.Dispose();
-            }
+
+            TranCmd?.Dispose();
+
+            conOpen?.Dispose();
+
         }
 
         #endregion

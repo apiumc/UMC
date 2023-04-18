@@ -1,10 +1,5 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Text;
 using System.Collections.Specialized;
-using System.Web;
-using UMC.Data;
-using System.Threading;
 
 namespace UMC.Net
 {
@@ -67,17 +62,11 @@ namespace UMC.Net
             get;
             set;
         }
-        public abstract NameValueCollection Form
-        {
-            get;
-        }
 
+        public abstract void RewriteUrl(String pathAndQuery);
+        public abstract void ReadAsForm(Action<NameValueCollection> action);
         public abstract void ReadAsData(Net.NetReadData readData);
 
-        public abstract System.IO.Stream InputStream
-        {
-            get;
-        }
         public abstract bool AllowSynchronousIO
         {
             get;
@@ -115,7 +104,7 @@ namespace UMC.Net
         {
             get;
         }
-
+         
         public abstract void Redirect(string url);
 
         public Object Tag

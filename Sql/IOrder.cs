@@ -28,7 +28,7 @@ namespace UMC.Data.Sql
     //    void Clear();
     //}
 
-    public interface IOrder<T> where T : class
+    public interface IOrder<T> where T : Record, new()
     {
         /// <summary>
         /// Desc

@@ -91,29 +91,5 @@ namespace UMC.Data.Sql
         /// <param name="field">字段</param>
         /// <returns></returns>
         IGrouper<T> Min(T field);
-        ///// <summary>
-        ///// 求和,对应的字段值为实体非空字段
-        ///// </summary>
-        ///// <param name="field">字段</param>
-        ///// <returns></returns>
-        //IGrouper<T> Sum(T field, T asField);
-        ///// <summary>
-        ///// 求平均,对应的字段值为实体非空字段
-        ///// </summary>
-        ///// <param name="field">字段</param>
-        ///// <returns></returns>
-        //IGrouper<T> Avg(T field, T asField);
-        ///// <summary>
-        ///// 求最大值,对应的字段值为实体非空字段
-        ///// </summary>
-        ///// <param name="field">字段</param>
-        ///// <returns></returns>
-        //IGrouper<T> Max(T field, T asField);
-        ///// <summary>
-        ///// 求最小值,对应的字段值为实体非空字段
-        ///// </summary>
-        ///// <param name="field">字段</param>
-        ///// <returns></returns>
-        //IGrouper<T> Min(T field, T asField);
     }
 }

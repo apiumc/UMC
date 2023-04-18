@@ -86,10 +86,10 @@ namespace UMC.Data.Sql
         /// <param name="sqlText">SQL查询文本</param>
         /// <param name="paramers">参数</param>
         /// <returns></returns>
-        T ExecuteSingle<T>(string sqlText, params object[] paramers);
+        T ExecuteSingle<T>(string sqlText, params object[] paramers) where T : Record, new();
         /// <param name="sqlText">字典格式化脚本</param>
         /// <param name="paramKeys">字典参数</param>
-        T ExecuteSingle<T>(string sqlText, System.Collections.IDictionary paramKeys);
+        T ExecuteSingle<T>(string sqlText, System.Collections.IDictionary paramKeys) where T : Record, new();
         /// <summary>
         /// 把查询到的字段转化对应的实体集
         /// </summary>
@@ -97,20 +97,20 @@ namespace UMC.Data.Sql
         /// <param name="sqlText">SQL查询文本</param>
         /// <param name="paramers">参数</param>
         /// <returns></returns>
-        List<T> Execute<T>(string sqlText, params object[] paramers);
+        List<T> Execute<T>(string sqlText, params object[] paramers) where T : Record, new();
         /// <summary>
         /// 把查询到的字段转化对应的实体集
         /// </summary>
         /// <param name="sqlText">字典格式化脚本</param>
         /// <param name="paramKeys">字典参数</param>
-        List<T> Execute<T>(string sqlText, System.Collections.IDictionary paramKeys);
+        List<T> Execute<T>(string sqlText, System.Collections.IDictionary paramKeys) where T : Record, new();
         /// <summary>
         /// 自定义处理一个查询只读的结果集
         /// </summary>
         /// <param name="sqlText">SQL查询文本</param>
         /// <param name="reader">处理数据集代理</param>
         /// <param name="paramers">参数</param>
-        void Execute<T>(string sqlText, DataReader<T> reader, params object[] paramers);
+        void Execute<T>(string sqlText, DataReader<T> reader, params object[] paramers) where T : Record, new();
         /// <summary>
         /// 返回分页的数据表
         /// </summary>
@@ -120,7 +120,7 @@ namespace UMC.Data.Sql
         /// <param name="reader">处理数据集代理</param>
         /// <param name="paramers">参数</param>
         /// <returns></returns>
-        void Execute<T>(string sqlText, int start, int limit, DataReader<T> reader, params object[] paramers);
+        void Execute<T>(string sqlText, int start, int limit, DataReader<T> reader, params object[] paramers) where T : Record, new();
 
         /// <summary>
         /// 返回分页的数据表
@@ -130,7 +130,7 @@ namespace UMC.Data.Sql
         /// <param name="limit">记录数</param>
         /// <param name="paramers">参数</param>
         /// <returns></returns>
-        List<T> Execute<T>(string sqlText, int start, int limit, params object[] paramers);
+        List<T> Execute<T>(string sqlText, int start, int limit, params object[] paramers) where T : Record, new();
         /// <summary>
         /// 返回分页的数据表
         /// </summary>
@@ -138,7 +138,7 @@ namespace UMC.Data.Sql
         /// <param name="start">开始位置</param>
         /// <param name="limit">记录数</param>
         /// <param name="paramKeys">字典参数</param>
-        List<T> Execute<T>(string sqlText, int start, int limit, System.Collections.IDictionary paramKeys);
+        List<T> Execute<T>(string sqlText, int start, int limit, System.Collections.IDictionary paramKeys) where T : Record, new();
         /// <summary>
         /// 自定义处理一个查询只读的结果集
         /// </summary>

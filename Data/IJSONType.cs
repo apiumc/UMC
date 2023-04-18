@@ -14,6 +14,9 @@ namespace UMC.Data
         /// </summary>
         /// <param name="prototypeName">属性名</param>
         /// <returns></returns>
-        Type GetType(string prototypeName);
+        // Type GetType(string prototypeName);
+        
+        Func<Object> GetInstance(string prototypeName);
     }
+
 }

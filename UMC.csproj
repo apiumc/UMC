@@ -1,27 +1,18 @@
 <Project Sdk="Microsoft.NET.Sdk">
-
   <PropertyGroup>
-    <TargetFramework>netstandard2.0</TargetFramework>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <UserSecretsId>dae22e2c-818c-480a-9fba-c34ad18eaf24</UserSecretsId>
+    <Title>UMC</Title>
+    <PackageId>UMC</PackageId>
+    <Version>1.0.28</Version>
+    <Authors>APIUMC</Authors>
+    <Company>小雨伞</Company>
+    <PackageDescription>UMC架构核心</PackageDescription>
+    <PackageProjectUrl>https://github.com/apiumc/UMC</PackageProjectUrl>
+    <PackageVersion>1.0.28</PackageVersion>
   </PropertyGroup>
-
-  <ItemGroup>
-    <None Remove="Data\" />
-    <None Remove="Net\" />
-    <None Remove="Resources\umc.html" />
-    <None Remove="Resources\" />
-    <None Remove="Security\" />
-    <None Remove="Sql\" />
-    <None Remove="Web\" />
-  </ItemGroup>
-  <ItemGroup>
-    <Folder Include="Data\" />
-    <Folder Include="Net\" />
-    <Folder Include="Resources\" />
-    <Folder Include="Security\" />
-    <Folder Include="Sql\" />
-    <Folder Include="Web\" />
-  </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="Resources\umc.html" />
+    <EmbeddedResource Include="Resources\page.html" />
   </ItemGroup>
 </Project>

@@ -1,5 +1,8 @@
 ﻿using System;
 using System.Collections;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
 using System.Xml;
 using UMC.Data;
 namespace UMC.Data
@@ -7,56 +10,12 @@ namespace UMC.Data
     /// <summary>
     /// 信息配置集合体
     /// </summary>
-    public class ProviderConfiguration
+    public class ProviderConfiguration : IJSON, IJSONType
     {
-        class ProviderHashtable : Hashtable
-        {
-            ProviderConfiguration pr;
-            public override object this[object key]
-            {
-                get
-                {
-
-                    return base[key];
-                }
-                set
-                {
-                    if (this.ContainsKey(key))
-                    {
-                        base[key] = value;
-                    }
-                    else
-                    {
-                        this.Add(key, value);
-                    }
-                }
-            }
-            public ProviderHashtable(ProviderConfiguration pr)
-            {
-                this.pr = pr;
-            }
-            public override void Add(object key, object value)
-            {
-                base.Add(key, value);
-                this.pr._KeyIndex.Add(key);
-            }
-            public override void Clear()
-            {
-                base.Clear();
-                this.pr._KeyIndex.Clear();
-            }
-            public override void Remove(object key)
-            {
-                base.Remove(key);
-                this.pr._KeyIndex.Remove(key);
-            }
-        }
-        /// <summary>
-        /// 默认初始化
-        /// </summary>
         public ProviderConfiguration()
         {
-            this._Providers = new ProviderHashtable(this);
+
+            this._Providers = new List<Provider>();
         }
         /// <summary>
         /// Provider提供的个数
@@ -65,7 +24,7 @@ namespace UMC.Data
         {
             get
             {
-                return this.Providers.Count;
+                return this._Providers.Count;
             }
         }
 
@@ -73,14 +32,12 @@ namespace UMC.Data
 
         // Fields
         private string _ProviderType;
-        private Hashtable _Providers;
-        private ArrayList _KeyIndex = new ArrayList();
-
+        private List<Provider> _Providers;
         public Provider this[string key]
         {
             get
             {
-                return this._Providers[key] as Provider;
+                return this._Providers.FirstOrDefault(r => r.Name == key);
             }
         }
 
@@ -93,7 +50,7 @@ namespace UMC.Data
         {
             get
             {
-                return this._Providers[this._KeyIndex[index]] as Provider;
+                return this._Providers[index] as Provider;
             }
         }
         private static System.Collections.Concurrent.ConcurrentDictionary<String, ProviderConfiguration> _cache = new System.Collections.Concurrent.ConcurrentDictionary<string, ProviderConfiguration>();
@@ -108,16 +65,12 @@ namespace UMC.Data
 
         public static ProviderConfiguration GetProvider(string filename)
         {
-            if (_cache.ContainsKey(filename))
-            {
-                return _cache[filename];
-            }
             ProviderConfiguration providers = null;
 
             if (System.IO.File.Exists(filename))
             {
                 providers = GetProvider(System.IO.File.OpenRead(filename));
-                _cache[filename] = providers;
+                
             }
             return providers;
         }
@@ -128,7 +81,6 @@ namespace UMC.Data
         public static ProviderConfiguration GetProvider(System.IO.TextReader reader)
         {
             ProviderConfiguration providers = new ProviderConfiguration();
-            //providers._ProviderAttribute = filename;
             System.Xml.XmlDocument doc = new XmlDocument();
             doc.Load(reader);
             providers._ProviderType = doc.DocumentElement.Attributes["providerType"] == null ? "" : doc.DocumentElement.Attributes["providerType"].Value;
@@ -152,11 +104,11 @@ namespace UMC.Data
                 providerType.Value = this._ProviderType;
                 provider.Attributes.Append(providerType);
             }
+            var em = this._Providers.GetEnumerator();
 
-
-            for (int i = 0; i < this._KeyIndex.Count; i++)
+            while (em.MoveNext())
             {
-                Provider pro = (Provider)this._Providers[this._KeyIndex[i]];
+                Provider pro = em.Current;
 
                 var add = doc.CreateElement("add");
                 var name = doc.CreateAttribute("name");
@@ -265,13 +217,13 @@ namespace UMC.Data
                 switch (node2.Name)
                 {
                     case "add":
-                        this.Providers[node2.Attributes["name"].Value] = new Provider(node2);
+                        this.Add(new Provider(node2));
                         break;
                     case "remove":
-                        this.Providers.Remove(node2.Attributes["name"].Value);
+                        this.Remove(node2.Attributes["name"].Value);
                         break;
                     case "clear":
-                        this.Providers.Clear();
+                        this.Clear();
                         break;
                 }
             }
@@ -303,18 +255,64 @@ namespace UMC.Data
                     switch (cur.Name.ToLower())
                     {
                         case "add":
-                            this.Providers[name] = new Provider(cur);
+                            this.Add(new Provider(cur));
                             break;
                         case "remove":
-                            this.Providers.Remove(name);
+                            this.Remove(name);
                             break;
                         case "clear":
-                            this.Providers.Clear();
+                            this.Clear();
                             break;
                     }
                 }
             }
         }
+
+        void IJSON.Write(TextWriter writer)
+        {
+
+            writer.Write('{');
+            writer.Write("\"ProviderType\":");
+            JSON.Serialize(this._ProviderType, writer);
+            writer.Write(',');
+            writer.Write("\"Providers\":[");
+            var em = this._Providers.GetEnumerator();
+            bool IsNext = false;
+            while (em.MoveNext())
+            {
+                if (IsNext)
+                {
+                    writer.Write(",");
+                }
+                else
+                {
+                    IsNext = true;
+                }
+                JSON.Serialize(em.Current, writer);
+            }
+
+
+            writer.Write("]}");
+        }
+
+        void IJSON.Read(string key, object value)
+        {
+            switch (key)
+            {
+                case "ProviderType":
+                    this._ProviderType = (value ?? String.Empty).ToString();
+                    break;
+                case "Providers":
+                    Provider[] providers = (Provider[])value;
+                    foreach (var p in providers)
+                    {
+                        if (p != null)
+                            this.Add(p);
+                    }
+                    break;
+            }
+        }
+
         /// <summary>
         /// 提供者属性，如果是从文件中加裁，则些属性为加裁的文件名
         /// </summary>
@@ -329,14 +327,59 @@ namespace UMC.Data
                 this._ProviderType = value;
             }
         }
+        public bool ContainsKey(string name)
+        {
+            return this._Providers.Exists(p => p.Name == name);
+        }
+        public void Clear()
+        {
+            this._Providers.Clear();
+        }
+        public void Add(Provider provider)
+        {
+
+            var index = this._Providers.FindIndex(p => p.Name == provider.Name);
+            if (index > -1)
+            {
+                this._Providers[index] = provider;
+
+            }
+            else
+            {
+                this._Providers.Add(provider);
+            }
+        }
+        public void Remove(String name)
+        {
+            var index = this._Providers.FindIndex(p => p.Name == name);
+            if (index > -1)
+            {
+                this._Providers.RemoveAt(index);
+
+            }
+        }
+
+        Func<object> IJSONType.GetInstance(string prototypeName)
+        {
+            switch (prototypeName)
+            {
+                default:
+                case "ProviderType":
+                    return () => String.Empty;
+                case "Providers":
+                    return () => Provider.Create("", "");
+
+            }
+        }
+
         /// <summary>
         /// 所有提供者节点信息
         /// </summary>
-        public Hashtable Providers
+        public Provider[] Providers
         {
             get
             {
-                return this._Providers;
+                return this._Providers.ToArray();
             }
         }
     }

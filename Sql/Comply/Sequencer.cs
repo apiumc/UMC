@@ -74,7 +74,7 @@ namespace UMC.Data.Sql
             Asc = 0,
         }
     }
-    class GSequencer<T> : IGroupOrder<T> where T : class
+    class GSequencer<T> : IGroupOrder<T> where T : Record
     {
         IGrouper<T> entity;
         Sequencer sequencer;
@@ -122,34 +122,26 @@ namespace UMC.Data.Sql
 
         IGroupOrder<T> IGroupOrder<T>.Asc(T field)
         {
-            //IGroupOrder<T> me = this;
-
-            var dic = CBO.GetProperty(field);
-            var em = dic.GetEnumerator();
-            while (em.MoveNext())
+            field.GetValues((t, v) =>
             {
-                sequencer.Asc(em.Current.Key);
-            }
+                sequencer.Asc(t);
+            });
             return this;
         }
 
         IGroupOrder<T> IGroupOrder<T>.Desc(T field)
         {
-            //IGroupOrder<T> me = this;
-
-            var dic = CBO.GetProperty(field);
-            var em = dic.GetEnumerator();
-            while (em.MoveNext())
+            field.GetValues((t, v) =>
             {
-                sequencer.Desc(em.Current.Key);
-            }
+                sequencer.Desc(t);
+            });
             return this;
         }
 
 
         IGrouper<T> IGroupOrder<T>.Entities => this.entity;//throw new NotImplementedException();
     }
-    class Sequencer<T> : IOrder<T> where T : class
+    class Sequencer<T> : IOrder<T> where T : Record, new()
     {
         IObjectEntity<T> entity;
         Sequencer sequencer;
@@ -179,12 +171,7 @@ namespace UMC.Data.Sql
         {
             IOrder<T> me = this;
 
-            var dic = CBO.GetProperty(field);
-            var em = dic.GetEnumerator();
-            while (em.MoveNext())
-            {
-                me.Asc(em.Current.Key);
-            }
+            field.GetValues((t, v) => me.Asc(t));
             return me;
         }
 
@@ -211,27 +198,13 @@ namespace UMC.Data.Sql
 
         IOrder<T> IOrder<T>.Asc(T field)
         {
-            //IOrder<T> me = this;/
-
-            var dic = CBO.GetProperty(field);
-            var em = dic.GetEnumerator();
-            while (em.MoveNext())
-            {
-                sequencer.Asc(em.Current.Key);
-            }
+            field.GetValues((t, v) => sequencer.Asc(t));
             return this;
         }
 
         IOrder<T> IOrder<T>.Desc(T field)
         {
-            //IOrder<T> me = this;/
-
-            var dic = CBO.GetProperty(field);
-            var em = dic.GetEnumerator();
-            while (em.MoveNext())
-            {
-                sequencer.Desc(em.Current.Key);
-            }
+            field.GetValues((t, v) => sequencer.Desc(t));
             return this;
         }
 

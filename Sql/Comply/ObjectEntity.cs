@@ -1,15 +1,13 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Text;
-//using System.Data.OleDb;
 using System.Data;
-using System.Text.RegularExpressions;
 using System.Collections;
 using System.Data.Common;
 
 namespace UMC.Data.Sql
 {
-    class ObjectEntity<T> : IObjectEntity<T> where T : class
+    class ObjectEntity<T> : IObjectEntity<T> where T : Record, new()
     {
         Conditions<T> cond;
         DbProvider db;
@@ -21,14 +19,14 @@ namespace UMC.Data.Sql
             this.db = sqler.DbProvider;
             this.cond = new Conditions<T>(this);
             this.seq = new Sequencer<T>(this);
-            this.SqlHelper = new EntityHelper(this.db, typeof(T), tableName);
+            this.SqlHelper = new EntityHelper(this.db, typeof(T).Name);
             this.sqler = sqler;
         }
 
         object Run(string fnName, string field)
         {
             var sb = new StringBuilder();
-            sb.AppendFormat("SELECT {2}({1}) FROM {0} ", this.SqlHelper.TableInfo.Name, field, fnName);
+            sb.AppendFormat("SELECT {2}({1}) FROM {0} ", this.SqlHelper.TableName, field, fnName);
             var li = cond.Wherer.FormatSqlText(sb, new List<object>(), this.db);
 
             this.script = Script.Create(sb.ToString(), li.ToArray());
@@ -36,13 +34,11 @@ namespace UMC.Data.Sql
         }
         T Run(string fnName, T field)
         {
-            var dic = CBO.GetProperty(field);
-            var em = dic.GetEnumerator();
             var sb = new StringBuilder();
             sb.Append("SELECT ");
             var v = false;
 
-            while (em.MoveNext())
+            field.GetValues((t, vval) =>
             {
                 if (v)
                 {
@@ -53,12 +49,13 @@ namespace UMC.Data.Sql
                     v = true;
                 }
                 sb.Append(fnName);
-                sb.AppendFormat("({1}{0}{2}) AS {1}{0}{2}", em.Current.Key, this.db.QuotePrefix, this.db.QuoteSuffix);
-                //me.Asc(em.Current.Key);
-            }
-            sb.AppendFormat(" FROM {0}", this.SqlHelper.TableInfo.Name);
+                sb.AppendFormat("({1}{0}{2}) AS {1}{0}{2}", t, this.db.QuotePrefix, this.db.QuoteSuffix);
+                
+            });
+            sb.AppendFormat(" FROM {0}", this.SqlHelper.TableName);
             if (v)
-            {    //sb.AppendFormat("SELECT {2}({1}) FROM {0} ", this.SqlHelper.TableInfo.Name, field, fnName);
+            {   
+                
                 var li = cond.Wherer.FormatSqlText(sb, new List<object>(), this.db);
 
                 this.script = Script.Create(sb.ToString(), li.ToArray());
@@ -131,7 +128,7 @@ namespace UMC.Data.Sql
 
         int IObjectEntity<T>.Update(T item)
         {
-            var sb = new StringBuilder(this.SqlHelper.CreateUpdateText(String.Empty, item));
+            var sb = new StringBuilder(this.SqlHelper.CreateUpdateText(item, String.Empty));
             List<object> list = new List<object>(this.SqlHelper.Arguments);
 
             cond.FormatSqlText(sb, list, this.db);
@@ -153,49 +150,25 @@ namespace UMC.Data.Sql
 
         int IObjectEntity<T>.Insert(params T[] items)
         {
+            int index = 0;
             if (items.Length > 0)
             {
-                var feld = this.SqlHelper.Fields.Find(f => f.Attribute.AutoField);
-                var em = items.GetEnumerator();
-                List<object> list = new List<object>();
-                if (feld == null)
+                this.sqler.Execute(script =>
                 {
-
-                    this.sqler.Execute(script =>
+                    if (index < items.Length)
                     {
-                        if (em.MoveNext())
-                        {
-                            var sqlText = this.SqlHelper.CreateInsertText(em.Current);
+                        var sqlText = this.SqlHelper.CreateInsertText(items[index]);
+                        index++;
 
-                            script.Reset(sqlText, this.SqlHelper.Arguments.ToArray());
-                            return true;
-                        }
-                        else
-                        {
-                            return false;
-                        }
-
-                    }, cmd => cmd.ExecuteNonQuery());
-                }
-                else
-                {
-                    this.sqler.Execute(script =>
+                        script.Reset(sqlText, this.SqlHelper.Arguments.ToArray());
+                        return true;
+                    }
+                    else
                     {
-                        if (em.MoveNext())
-                        {
-                            var sqlText = this.SqlHelper.CreateInsertText(em.Current);
-                            sqlText = "\r\n" + this.db.GetIdentityText(this.SqlHelper.TableInfo.Name);
+                        return false;
+                    }
 
-                            script.Reset(sqlText, this.SqlHelper.Arguments.ToArray());
-                            return true;
-                        }
-                        else
-                        {
-                            return false;
-                        }
-
-                    }, cmd => feld.Property.SetValue(em.Current, cmd.ExecuteScalar(), null));
-                }
+                }, cmd => cmd.ExecuteNonQuery());
             }
 
             return items.Length;
@@ -206,7 +179,7 @@ namespace UMC.Data.Sql
         object IObjectEntity<T>.Single(string field)
         {
             var sb = new StringBuilder();
-            sb.AppendFormat("SELECT {1} FROM {0} ", this.SqlHelper.TableInfo.Name, field);
+            sb.AppendFormat("SELECT {1} FROM {0} ", this.SqlHelper.TableName, field);
             var li = cond.FormatSqlText(sb, new List<object>(), this.db);
             seq.FormatSqlText(sb);
             this.script = Script.Create(sb.ToString(), li.ToArray());
@@ -223,7 +196,7 @@ namespace UMC.Data.Sql
         IDictionary IObjectEntity<T>.Single(params string[] field)
         {
             var sb = new StringBuilder();
-            sb.AppendFormat("SELECT {1} FROM {0} ", this.SqlHelper.TableInfo.Name, String.Join(",", field));
+            sb.AppendFormat("SELECT {1} FROM {0} ", this.SqlHelper.TableName, String.Join(",", field));
             var li = cond.FormatSqlText(sb, new List<object>(), this.db);
             seq.FormatSqlText(sb);
             this.script = Script.Create(sb.ToString(), li.ToArray());
@@ -237,7 +210,7 @@ namespace UMC.Data.Sql
         object[] IObjectEntity<T>.Query(string field)
         {
             var sb = new StringBuilder();
-            sb.AppendFormat("SELECT {1} FROM {0} ", this.SqlHelper.TableInfo.Name, field);
+            sb.AppendFormat("SELECT {1} FROM {0} ", this.SqlHelper.TableName, field);
             var args = cond.FormatSqlText(sb, new List<object>(), this.db);
             seq.FormatSqlText(sb);
             this.script = Script.Create(sb.ToString(), args.ToArray());
@@ -314,7 +287,7 @@ namespace UMC.Data.Sql
         int IObjectEntity<T>.Update(string format, T item)
         {
 
-            var sb = new StringBuilder(this.SqlHelper.CreateUpdateText(format, item));
+            var sb = new StringBuilder(this.SqlHelper.CreateUpdateText(item, format));
             List<object> list = new List<object>(this.SqlHelper.Arguments);
 
             cond.FormatSqlText(sb, list, this.db);
@@ -383,13 +356,11 @@ namespace UMC.Data.Sql
 
         IGrouper<T> IObjectEntity<T>.GroupBy(T field)
         {
-            var dic = CBO.GetProperty(field);
-            var em = dic.GetEnumerator();
             var fields = new List<String>();
-            while (em.MoveNext())
+            field.GetValues((t, v) =>
             {
-                fields.Add(em.Current.Key);
-            }
+                fields.Add(t);
+            });
             return new Grouper<T>((Sqler)this.sqler, this.SqlHelper, this.cond, fields.ToArray());
         }
 
@@ -413,7 +384,7 @@ namespace UMC.Data.Sql
         Script IObjectEntity<T>.Script(string field)
         {
             var sb = new StringBuilder();
-            sb.AppendFormat("SELECT {1} FROM {0} ", this.SqlHelper.TableInfo.Name, field);
+            sb.AppendFormat("SELECT {1} FROM {0} ", this.SqlHelper.TableName, field);
             var lp = cond.FormatSqlText(sb, new List<object>(), this.db);
             seq.FormatSqlText(sb);
             return Script.Create(sb.ToString(), lp.ToArray());
@@ -451,7 +422,7 @@ namespace UMC.Data.Sql
         void IObjectEntity<T>.Query(string field, DataReader dr)
         {
             var sb = new StringBuilder();
-            sb.AppendFormat("SELECT {1} FROM {0} ", this.SqlHelper.TableInfo.Name, field);
+            sb.AppendFormat("SELECT {1} FROM {0} ", this.SqlHelper.TableName, field);
             // this.sqler.Execute(this.script.Text, dr, this.script.Arguments);
             var lp = cond.FormatSqlText(sb, new List<object>(), this.db);
             seq.FormatSqlText(sb);
@@ -507,29 +478,10 @@ namespace UMC.Data.Sql
         #endregion
 
 
-        void IObjectEntity<T>.AddField(string field, string name)
-        {
-            var cfield = this.SqlHelper.Fields.Find(g => g.Property.Name == name);
-            if (cfield != null)
-            {
-                cfield.Attribute = new FieldAttribute(field, true) { Select = true };
-
-            }
-            else
-            {
-                this.SqlHelper.Fields.Add(new EntityHelper.FieldInfo
-                {
-                    Name = name,
-                    Attribute = new FieldAttribute(field, true) { Select = true },
-                    FieldIndex = this.SqlHelper.Fields.Count
-                });
-
-            }
-        }
 
         int IObjectEntity<T>.Update(string format, T field, T field2)
         {
-            var sb = new StringBuilder(this.SqlHelper.CreateUpdateText(format, field));
+            var sb = new StringBuilder(this.SqlHelper.CreateUpdateText(field, format));
             this.SqlHelper.AppendUpdateText(sb, field2, String.Empty);
             List<object> list = new List<object>(this.SqlHelper.Arguments);
 
@@ -542,7 +494,7 @@ namespace UMC.Data.Sql
 
         int IObjectEntity<T>.Update(T field, T field2)
         {
-            var sb = new StringBuilder(this.SqlHelper.CreateUpdateText("{0}+{1}", field));
+            var sb = new StringBuilder(this.SqlHelper.CreateUpdateText(field, "{0}+{1}"));
             this.SqlHelper.AppendUpdateText(sb, field2, String.Empty);
             List<object> list = new List<object>(this.SqlHelper.Arguments);
 

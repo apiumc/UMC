@@ -5,14 +5,14 @@ using System.Data.Common;
 
 namespace UMC.Data.Sql
 {
-    class Conditions<T> : IWhere<T> where T : class
+    class Conditions<T> : IWhere<T> where T : Record, new()
     {
         public Conditions Wherer
         {
             get;
             set;
         }
-        public List<object> FormatSqlText(StringBuilder sb, List<object> lp,DbProvider dbProvider)
+        public List<object> FormatSqlText(StringBuilder sb, List<object> lp, DbProvider dbProvider)
         {
 
             return Wherer.FormatSqlText(sb, lp, dbProvider);
@@ -70,35 +70,25 @@ namespace UMC.Data.Sql
 
         IWhere<T> IWhere<T>.Or(T item)
         {
-            var dic = CBO.GetProperty(item);
-            var em = dic.GetEnumerator();
-            while (em.MoveNext())
-            {
-                this.IWherer.Or().Equal(em.Current.Key, em.Current.Value);
-            }
+            // var dic = item.GetValues();
+            // var em = dic.GetEnumerator();
+            item.GetValues((t, v) => this.IWherer.Or().Equal(t, v));
             return this;
         }
 
         IWhere<T> IWhere<T>.And(T item)
         {
-            var dic = CBO.GetProperty(item);
-            var em = dic.GetEnumerator();
-            while (em.MoveNext())
-            {
-                this.IWherer.And().Equal(em.Current.Key, em.Current.Value);
-            }
+            
+            item.GetValues((t, v) => this.IWherer.And().Equal(t, v));
+            
             return this;
 
         }
 
         IWhere<T> IWhere<T>.Remove(T item)
         {
-            var dic = CBO.GetProperty(item);
-            var em = dic.GetEnumerator();
-            while (em.MoveNext())
-            {
-                this.IWherer.Remove(em.Current.Key);
-            }
+            item.GetValues((t, v) => this.IWherer.Remove(t));
+            
             return this;
         }
 
@@ -109,16 +99,13 @@ namespace UMC.Data.Sql
 
         IWhere<T> IWhere<T>.Replace(T field)
         {
-            //this.Condit.
-            var dic = CBO.GetProperty(field);
-            var em = dic.GetEnumerator();
-            while (em.MoveNext())
-            {
-                if (this.Wherer.ContainsKey(em.Current.Key))
-                {
-                    IWherer[em.Current.Key] = em.Current.Value;
-                }
-            }
+            field.GetValues((t, v) =>
+             {
+                 if (this.Wherer.ContainsKey(t))
+                 {
+                     IWherer[t] = v;
+                 }
+             });
             return this;
 
         }
@@ -151,48 +138,10 @@ namespace UMC.Data.Sql
         }
 
 
-        //IWhere IWhere.Reset()
-        //{
-        //    this.IWherer.Reset();
-        //    return this;
-        //}
-
-        //int IWhere.Remove(string name)
-        //{
-        //    return this.IWherer.Remove(name);
-        //}
-
         int IWhere<T>.Count
         {
             get { return this.IWherer.Count; }
         }
-
-
-
-        //IWhere IWhere.Or(string expression, params object[] paramers)
-        //{
-        //    return this.IWherer.Or(expression, paramers);
-        //}
-
-        //IWhere IWhere.And(string expression, params object[] paramers)
-        //{
-        //    return this.IWherer.And(expression, paramers);
-        //}
-
-        //IOperator IWhere.Or()
-        //{
-        //    return this.IWherer.Or();//(expression, paramers);
-        //}
-
-        //IOperator IWhere.And()
-        //{
-        //    return this.IWherer.And();
-        //}
-
-        //IWhere IWhere.Contains()
-        //{
-        //    return this.IWherer.Contains();
-        //}
 
 
 
@@ -205,11 +154,6 @@ namespace UMC.Data.Sql
         }
 
 
-
-        //IWhere IWhere.Contains()
-        //{
-        //    return this.IWherer.Contains();
-        //}
 
         #endregion
     }
@@ -247,7 +191,7 @@ namespace UMC.Data.Sql
             get;
             set;
         }
-        //public List<object> SqlParams = new List<object>();
+
         public Conditions(string field, DbOperator co, object value)
         {
             GroubId = Guid.NewGuid();
@@ -506,9 +450,9 @@ namespace UMC.Data.Sql
                         sb.AppendFormat(" {0} ( ", parms[i].FristJoin ?? pjs.JoinVocable);
                     }
 
-                    SetParameter(dbProvider,parms[i], sb, sqlParams);
+                    SetParameter(dbProvider, parms[i], sb, sqlParams);
 
-                    SetGroup(dbProvider,destLength, parms[i].GroubId, sb, sqlParams);
+                    SetGroup(dbProvider, destLength, parms[i].GroubId, sb, sqlParams);
                     sb.Append(") ");
                 }
                 else
@@ -524,7 +468,7 @@ namespace UMC.Data.Sql
                     }
 
 
-                    SetParameter(dbProvider,parms[i], sb, sqlParams);
+                    SetParameter(dbProvider, parms[i], sb, sqlParams);
 
                 }
             }
@@ -536,8 +480,7 @@ namespace UMC.Data.Sql
         {
             if (Arguments.Count >= 0)
             {
-                //  sb.Append(" Where 1=1 ");
-                SetGroup(dbProvider,sb.Length, this.GroubId, sb, lp);
+                SetGroup(dbProvider, sb.Length, this.GroubId, sb, lp);
             }
             return lp;
         }

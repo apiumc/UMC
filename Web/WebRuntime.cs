@@ -42,74 +42,9 @@ namespace UMC.Web
             get;
             set;
         }
-        static bool isScanning()
+        public static bool isScanning()
         {
             return WebRuntime.webFactorys.Count > 0 || WebRuntime.activities.Count > 0 || WebRuntime.flows.Count > 0;
-        }
-        static WebRuntime()
-        {
-            //var sb = new StringBuilder();
-            //sb.AppendLine("                                                                     ");
-            //sb.AppendLine("                                                                     ");
-            //sb.AppendLine("    $$         $$           $$$$$$    $$$$$$             $$$$$$$$    ");
-            //sb.AppendLine("    $$         $$         $$      $$$$      $$         $$            ");
-            //sb.AppendLine("    $$         $$        $$        $$        $$       $$             ");
-            //sb.AppendLine("    $$         $$        $$        $$        $$       $$             ");
-            //sb.AppendLine("    $$         $$        $$        $$        $$       $$             ");
-            //sb.AppendLine("    $$         $$        $$        $$        $$       $$             ");
-            //sb.AppendLine("    $$         $$        $$        $$        $$       $$             ");
-            //sb.AppendLine("     $$       $$         $$        $$        $$        $$            ");
-            //sb.AppendLine("       $$$$$$$           $$        $$        $$          $$$$$$$$    ");
-            //sb.AppendLine("                                                                     ");
-            //sb.AppendLine("                                                                     ");
-            //Console.Write(sb);
-            var dics = new System.IO.DirectoryInfo(System.Environment.CurrentDirectory).GetFiles("*.dll", SearchOption.TopDirectoryOnly);
-
-            var last = DateTime.Now;
-            foreach (var f in dics)
-            {
-
-                if (last > f.LastWriteTime)
-                {
-                    last = f.LastWriteTime;
-                }
-            }
-
-            String mapFile = Utility.MapPath("App_Data/register.net");
-            var lastTime = Utility.TimeSpan(last);
-            String m = Utility.Reader(mapFile);
-            if (String.IsNullOrEmpty(m) == false)
-            {
-                Hashtable map = JSON.Deserialize(m) as Hashtable;
-                if (map.ContainsKey("time"))
-                {
-                    if (Utility.IntParse(map["time"].ToString(), 0) == lastTime)
-                    {
-                        Array mapings = map["data"] as Array;
-                        if (mapings != null)
-                        {
-                            int l = mapings.Length;
-                            for (int i = 0; i < l; i++)
-                            {
-                                String v = mapings.GetValue(i) as string;
-                                WebRuntime.Register(Type.GetType(v));
-                            }
-                        }
-                    }
-                }
-            }
-            if (isScanning() == false)
-            {
-                Reflection.Instance().ScanningClass();
-                Utility.Writer(mapFile, JSON.Serialize(new WebMeta().Put("time", lastTime).Put("data", WebRuntime.RegisterCls())), false);
-            }
-            WebRuntime.webFactorys.Sort((x, y) => y.Weight.CompareTo(x.Weight));
-            var em = WebRuntime.flows.GetEnumerator();
-            while (em.MoveNext())
-            {
-                em.Current.Value.Sort((x, y) => y.Weight.CompareTo(x.Weight));
-
-            }
         }
         public static WebContext ProcessRequest(String model, String cmd, System.Collections.IDictionary header, WebClient client)
         {
@@ -128,7 +63,7 @@ namespace UMC.Web
                 foreach (WeightType wt in WebRuntime.webFactorys)
                 {
                     var t = wt.Type;
-                    metas.Add(t.FullName + "," + t.Assembly.FullName);
+                    metas.Add(t.FullName);
                 }
             }
             if (WebRuntime.flows.Count > 0)
@@ -141,7 +76,7 @@ namespace UMC.Web
                     {
 
                         var t = wt.Type;
-                        metas.Add(t.FullName + "," + t.Assembly.FullName);
+                        metas.Add(t.FullName);
                     }
                 }
             }
@@ -155,7 +90,7 @@ namespace UMC.Web
                     {
                         var t = mv.Current.Value;
 
-                        metas.Add(t.FullName + "," + t.Assembly.FullName);
+                        metas.Add(t.Type.FullName);
                     }
                 }
             }
@@ -188,6 +123,82 @@ namespace UMC.Web
             get;
             set;
         }
+        public static void Register(Func<IWebFactory> t)
+        {
+            var weight = new WeightFactory(t);
+
+            var tUid = weight.Type.GUID;
+            var mpps = weight.Type.GetCustomAttributes(typeof(MappingAttribute), false);
+            foreach (var m in mpps)
+            {
+                var mp = m as MappingAttribute;
+
+                if (webFactorys.Exists(e => e.Type.GUID == tUid) == false)
+                {
+                    webFactorys.Add(weight);
+                }
+            }
+        }
+        public static void Register(Func<WebFlow> t)
+        {
+            var weight = new WeightWebFlow(t);
+
+            var tUid = weight.Type.GUID;
+            var mpps = weight.Type.GetCustomAttributes(typeof(MappingAttribute), false);
+            foreach (var m in mpps)
+            {
+                var mp = m as MappingAttribute;
+                if (flows.ContainsKey(mp.Model) == false)
+                {
+                    flows.Add(mp.Model, new List<WeightType>()); ;
+                }
+                var list = flows[mp.Model];
+                if (list.Exists(e => e.Type.GUID == tUid) == false)
+                {
+                    list.Add(weight);
+                    authKeys[mp.Model] = mp.Auth;
+
+                }
+            }
+
+        }
+        public static void Register(Func<WebActivity> t)
+        {
+            var weight = new WeightActivity(t);
+
+            var mpps = weight.Type.GetCustomAttributes(typeof(MappingAttribute), false);
+            foreach (var m in mpps)
+            {
+                var mp = m as MappingAttribute;
+                if (String.IsNullOrEmpty(mp.Command) == false && String.IsNullOrEmpty(mp.Model) == false)
+                {
+
+                    if (activities.TryGetValue(mp.Model, out var actDic) == false)
+                    {
+                        actDic = new Dictionary<string, WeightType>();
+                        activities.Add(mp.Model, actDic);
+                    }
+                    if (actDic.TryGetValue(mp.Command, out var cmp))
+                    {
+
+                        if (cmp.Weight >= mp.Weight)
+                        {
+                            continue;
+                        }
+                    }
+
+                    authKeys[$"{mp.Model}.{mp.Command}"] = mp.Auth;
+                    weight.Weight = mp.Weight;
+                    activities[mp.Model][mp.Command] = weight;
+
+
+
+
+                }
+
+
+            }
+        }
         public static void Register(Type t)
         {
             if (t == null)
@@ -203,33 +214,23 @@ namespace UMC.Web
                 {
                     if (typeof(WebActivity).IsAssignableFrom(t))
                     {
-                        if (activities.ContainsKey(mp.Model) == false)
+
+                        if (activities.TryGetValue(mp.Model, out var actDic) == false)
                         {
-                            activities.Add(mp.Model, new Dictionary<string, Type>());
+                            actDic = new Dictionary<string, WeightType>();
+                            activities.Add(mp.Model, actDic);
                         }
-                        var cmd = String.Format("{0}.{1}", mp.Model, mp.Command);
-                        var actDic = activities[mp.Model];
-
-
-                        if (weightKeys.ContainsKey(cmd))
+                        if (actDic.TryGetValue(mp.Command, out var cmp))
                         {
 
-                            if (weightKeys[cmd] >= mp.Weight)
+                            if (cmp.Weight >= mp.Weight)
                             {
                                 continue;
                             }
                         }
-                        if (mp.Category > 0)
-                        {
-                            Categorys.Add(mp);
-                        }
-                        if (mp.Weight > 0)
-                        {
-                            weightKeys[cmd] = mp.Weight;
-                        }
 
-                        activities[mp.Model][mp.Command] = t;
-                        authKeys[cmd] = mp.Auth;
+                        authKeys[$"{mp.Model}.{mp.Command}"] = mp.Auth;
+                        activities[mp.Model][mp.Command] = new WeightType(t);
 
                     }
                 }
@@ -244,7 +245,7 @@ namespace UMC.Web
                         var list = flows[mp.Model];
                         if (list.Exists(e => e.Type.GUID == tUid) == false)
                         {
-                            list.Add(new WeightType { Type = t, Weight = mp.Weight });
+                            list.Add(new WeightType(t) { Weight = mp.Weight });
                             authKeys[mp.Model] = mp.Auth;
 
                         }
@@ -255,15 +256,7 @@ namespace UMC.Web
                 {
                     if (webFactorys.Exists(e => e.Type.GUID == tUid) == false)
                     {
-
-                        //if (typeof(WebFactory).IsAssignableFrom(t))
-                        //{
-                        //    webFactorys.Insert(0, new WeightType { Type = t, Weight = 10000 });
-                        //}
-                        //else
-                        //{
-                        webFactorys.Add(new WeightType { Type = t, Weight = mp.Weight });
-                        //}
+                        webFactorys.Add(new WeightType(t) { Weight = mp.Weight });
                     }
                 }
 
@@ -282,31 +275,77 @@ namespace UMC.Web
         }
         public class WeightType
         {
-            public Type Type { get; set; }
+
+            public WeightType(Type type)
+            {
+                Type = type;
+            }
+            public Type Type { get; protected set; }
             public int Weight
             {
                 get; set;
             }
+            public virtual Object Instance()
+            {
+                return Reflection.CreateInstance(Type);
+            }
+        }
+        class WeightFactory : WeightType
+        {
+            Func<IWebFactory> _func;
+            public WeightFactory(Func<IWebFactory> type) : base(type().GetType())
+            {
+                _func = type;
+            }
+            public override Object Instance()
+            {
+                return _func();
+            }
         }
 
-        internal static List<MappingAttribute> Categorys = new List<MappingAttribute>();
+        class WeightActivity : WeightType
+        {
+            Func<WebActivity> func;
+            public WeightActivity(Func<WebActivity> type) : base(type().GetType())
+            {
+                func = type;
+            }
+            public override Object Instance()
+            {
+                return func();
+            }
+        }
+        class WeightWebFlow : WeightType
+        {
+            Func<WebFlow> func;
+            public WeightWebFlow(Func<WebFlow> type) : base(type().GetType())
+            {
+                func = type;
+            }
+            public override Object Instance()
+            {
+                return func();
+            }
+        }
+
         internal static Dictionary<String, WebAuthType> authKeys = new Dictionary<String, WebAuthType>();
-        internal static Dictionary<String, int> weightKeys = new Dictionary<String, int>();
         internal static List<WeightType> webFactorys = new List<WeightType>();
         internal static Dictionary<String, List<WeightType>> flows = new Dictionary<string, List<WeightType>>();
-        internal static Dictionary<String, Dictionary<String, Type>> activities = new Dictionary<String, Dictionary<string, Type>>();
+        internal static Dictionary<String, Dictionary<String, WeightType>> activities = new Dictionary<String, Dictionary<string, WeightType>>();
 
         class MappingFLow : WebFlow
         {
-
+            Dictionary<String, WeightType> _actives;
+            public MappingFLow(Dictionary<String, WeightType> actives)
+            {
+                _actives = actives;
+            }
             public override WebActivity GetFirstActivity()
             {
-                var webRequest = this.Context.Request;
-                var dic = activities[webRequest.Model];
-                if (dic.ContainsKey(webRequest.Command))
-                {
-                    return Reflection.CreateInstance(dic[webRequest.Command]) as WebActivity;
 
+                if (_actives.TryGetValue(this.Context.Request.Command, out var t))
+                {
+                    return t.Instance() as WebActivity;
                 }
                 else
                 {
@@ -318,10 +357,10 @@ namespace UMC.Web
         {
             WebFlow IWebFactory.GetFlowHandler(string mode)
             {
-                if (activities.ContainsKey(mode))
+                if (activities.TryGetValue(mode, out var a))
                 {
 
-                    return new MappingFLow();
+                    return new MappingFLow(a);
 
                 }
                 return WebFlow.Empty;
@@ -335,43 +374,22 @@ namespace UMC.Web
         }
         class MappingFlowFactory : IWebFactory
         {
-            int index = 0;
-            public MappingFlowFactory(int i)
+            WeightType weightType;
+            public MappingFlowFactory(WeightType weightType)
             {
-                this.index = i;
+                this.weightType = weightType;
             }
             WebFlow IWebFactory.GetFlowHandler(string mode)
             {
-                if (flows.ContainsKey(mode))
-                {
-                    return Reflection.CreateInstance(flows[mode][index].Type) as WebFlow;
-                }
-                return WebFlow.Empty;
-
+                return weightType.Instance() as WebFlow;
             }
 
             void IWebFactory.OnInit(WebContext context)
             {
 
             }
-            public static IWebFactory[] GetFactory(String model)
-            {
-                if (flows.ContainsKey(model))
-                {
-                    var len = flows[model].Count;
-                    var list = new List<IWebFactory>();
-
-                    for (var i = 0; i < len; i++)
-                    {
-                        list.Add(new MappingFlowFactory(i));
-
-                    }
-                    return list.ToArray();
-                }
-                return new IWebFactory[0];
-
-            }
         }
+
         void DoFactory(List<IWebFactory> factorys)
         {
             foreach (var factory in factorys)
@@ -386,7 +404,10 @@ namespace UMC.Web
                 {
                     this.CurrentFlow = flow;
 
-                    ProcessActivity(flow, flow.GetFirstActivity());
+                    if (ProcessActivity(flow, flow.GetFirstActivity()))
+                    {
+                        break;
+                    }
                 }
             }
         }
@@ -395,11 +416,9 @@ namespace UMC.Web
         {
             var factorys = new List<IWebFactory>();
 
-
-
             foreach (var ftype in webFactorys)
             {
-                var flowFactory = Reflection.CreateInstance(ftype.Type) as IWebFactory;
+                var flowFactory = ftype.Instance() as IWebFactory;
                 if (flowFactory != null)
                 {
                     flowFactory.OnInit(Context);
@@ -410,9 +429,15 @@ namespace UMC.Web
 
             factorys.Add(new MappingActivityFactory());
 
-            factorys.AddRange(MappingFlowFactory.GetFactory(Context.Request.Model));
+            if (flows.TryGetValue(Context.Request.Model, out var _fs))
+            {
+                foreach (var w in _fs)
+                {
+                    factorys.Add(new MappingFlowFactory(w));
+                }
+            }
 
-            
+
             try
             {
                 DoFactory(factorys);
@@ -424,17 +449,19 @@ namespace UMC.Web
             }
 
         }
-        void ProcessActivity(WebFlow flow, WebActivity active)
+        bool ProcessActivity(WebFlow flow, WebActivity active)
         {
             active.Context = this.Context;
             if (active == WebActivity.Empty)
             {
+                return false;
             }
             else
             {
                 active.Flow = flow;
                 this.CurrentActivity = active;
                 active.ProcessActivity(this.Request, this.Response);
+                return true;
             }
         }
         public WebRequest Request

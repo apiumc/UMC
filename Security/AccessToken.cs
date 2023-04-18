@@ -13,12 +13,10 @@ namespace UMC.Security
     /// </summary>
     public class AccessToken : UMC.Data.IJSON
     {
-        //protected AccessToken()
-        //{
-        //    this.Items = new WebMeta();
-        //    this.Roles = String.Empty;
-        //    this.Organizes = String.Empty;
-        //}
+        public AccessToken() : this(Guid.Empty)
+        {
+
+        }
         public AccessToken(Guid deviceId)
         {
             this.Device = deviceId;

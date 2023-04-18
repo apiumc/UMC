@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Security.Cryptography.X509Certificates;
 using System.Text;
 
 namespace UMC.Security
@@ -97,14 +98,14 @@ namespace UMC.Security
         }
         public virtual bool IsOrganizeMember(string organizeName)
         {
-            var Roles = this.Roles;
+            var Roles = this.Organizes;
             if (Roles == null)
             {
                 return false;
             }
             else
             {
-                foreach (var r in Roles)
+                foreach (var r in Organizes)
                 {
                     if (String.Equals(organizeName, r, StringComparison.CurrentCultureIgnoreCase))
                     {
@@ -176,7 +177,7 @@ namespace UMC.Security
         {
             this.Id = sn;
         }
-        public override string Alias => String.Empty; 
+        public override string Alias => String.Empty;
         public override string[] Organizes => new string[0];
         public override string[] Roles => new string[0];
         public override string Name => "?";

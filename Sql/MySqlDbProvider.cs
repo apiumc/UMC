@@ -144,22 +144,7 @@ namespace UMC.Data.Sql
 
                 if (Instance == null)
                 {
-                    var als = AppDomain.CurrentDomain.GetAssemblies();
-                    foreach (var a in als)//mscorlib, 
-                    {
-                        var type = a.GetType("MySql.Data.MySqlClient.MySqlClientFactory");
-                        if (type != null)
-                        {
-                            Instance = type.GetField("Instance").GetValue(null) as System.Data.Common.DbProviderFactory;
-
-                            break;
-                        }
-                    }
-                    if (Instance == null)
-                    {
-                        throw new Exception("请引用MySql.Data.dll");
-
-                    }
+                    throw new Exception("请引用MySql.Data.dll");
                 }
                 return Instance;
             }

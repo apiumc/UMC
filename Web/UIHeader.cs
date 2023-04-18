@@ -122,12 +122,12 @@ namespace UMC.Web
                 var acount = new WebMeta().Put("amount", amount);
                 if (String.IsNullOrEmpty(tip) == false)
                 {
-                    acount.Put("tag", tip);
+                    acount.Put("tip", tip);
                 }
 
-                if (String.IsNullOrEmpty(tip) == false)
+                if (String.IsNullOrEmpty(tag) == false)
                 {
-                    acount.Put("tag", tip);
+                    acount.Put("tag", tag);
                 }
 
                 if (click != null)

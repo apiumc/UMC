@@ -113,14 +113,35 @@ namespace UMC.Web
         /// <param name="dialog">对话框</param>
         public void Redirect(string mode, string cmd, UMC.Web.UIDialog dialog)
         {
+            Redirect(mode, cmd, dialog, true);
+
+        }
+        /// <summary>
+        /// 重新请求
+        /// </summary>
+        /// <param name="mode">模块</param>
+        /// <param name="cmd">命令</param>
+        /// <param name="dialog">对话框</param>
+        public void Redirect(string mode, string cmd, UMC.Web.UIDialog dialog, bool endResponse)
+        {
             var config = dialog.ToAsyncArgs(_client._runtime.Context);
-            //dialog.a
             config.Put("Name", "_");
             config.Put("Submit", new WebMeta().Put("model", mode, "cmd", cmd));
             this.Headers.Set(EventType.AsyncDialog, config);
             this.ClientEvent |= WebEvent.AsyncDialog;
+            if (endResponse)
+                this.End();
 
-            this.End();
+        }
+        public void Redirect(string mode, string cmd, UMC.Web.UIDialog dialog, WebMeta arguments, bool endResponse)
+        {
+            var config = dialog.ToAsyncArgs(_client._runtime.Context);
+            config.Put("Name", "_");
+            config.Put("Submit", new WebMeta().Put("model", mode, "cmd", cmd).Put("send", arguments));
+            this.Headers.Set(EventType.AsyncDialog, config);
+            this.ClientEvent |= WebEvent.AsyncDialog;
+            if (endResponse)
+                this.End();
 
         }
         /// <summary>

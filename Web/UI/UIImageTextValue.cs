@@ -30,12 +30,6 @@ namespace UMC.Web.UI
             this.Formats.Put("value", value);
             return this;
         }
-        //public UIImageTextValue Put(String name, String value)
-        //{
-        //    data.Put(name, value);
-        //    return this;
-
-        //}
         public UIImageTextValue Click(UIClick click)
         {
             data.Put("click", click);

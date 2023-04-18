@@ -13,6 +13,25 @@ namespace UMC.Web
     /// </summary>
     public class WebClient
     {
+        public static void Register(Type type)
+        {
+            WebRuntime.Register(type);
+        }
+
+        public static void Register(Func<WebActivity> t)
+        {
+
+            WebRuntime.Register(t);
+        }
+        public static void Register(Func<WebFlow> t)
+        {
+
+            WebRuntime.Register(t);
+        }
+        public static void Register(Func<IWebFactory> t)
+        {
+            WebRuntime.Register(t);
+        }
         class CommandKey
         {
             public string cmd
@@ -43,7 +62,7 @@ namespace UMC.Web
         public bool? IsVerify
         {
             get;
-            set;
+            private set;
         }
         internal WebRuntime _runtime;
         public void Clear(WebEvent Event)
@@ -65,13 +84,6 @@ namespace UMC.Web
                 return this._context.Server;
             }
         }
-        internal System.IO.Stream InputStream
-        {
-            get
-            {
-                return this._context.InputStream;
-            }
-        }
         public System.Collections.Hashtable OuterHeaders
         {
             get;
@@ -81,39 +93,53 @@ namespace UMC.Web
         public WebEvent ClientEvent
         {
             get;
-            set;
+            private set;
         }
         int RedirectTimes = 0;
 
 
         public Uri Uri
         {
-            get;
-            set;
+            get
+            {
+
+                return this._context.Url;
+            }
         }
         public string UserHostAddress
         {
-            get;
-            set;
+            get
+            {
+                return this._context.UserHostAddress;
+            }
         }
         public Uri UrlReferrer
         {
-            get;
-            set;
+            get
+            {
+                return this._context.UrlReferrer;
+            }
         }
 
         public bool IsApp { get; set; }
-        public UMC.Security.AccessToken Token { get; set; }
+        public UMC.Security.AccessToken Token
+        {
+            get
+            {
+                return _context.Token;
+            }
+        }
         public bool IsCashier { get; set; }
         public string UserAgent
         {
-            get;
-            set;
+            get
+            {
+                return this._context.UserAgent;
+            }
         }
 
         static bool CheckApp(String UserAgent)
         {
-
             if (String.IsNullOrEmpty(UserAgent) == false)
             {
                 return UserAgent.Contains("UMC Client");
@@ -125,14 +151,9 @@ namespace UMC.Web
         public WebClient(Net.NetContext context)
         {
             this._context = context;
-            this.Token = context.Token;
-            this.Uri = context.Url;
-            this.UserHostAddress = context.UserHostAddress;
-            this.UrlReferrer = context.UrlReferrer;
-            this.UserAgent = context.UserAgent;
 
             this.IsCashier = context.Token.IsInRole(UMC.Security.AccessToken.UserRole);
-            this.IsApp = CheckApp(this.UserAgent);
+            this.IsApp = CheckApp(context.UserAgent);
 
         }
 
@@ -241,13 +262,13 @@ namespace UMC.Web
         public void Command(string json)
         {
             _Finish = new Hashtable();
-            var cmds = UMC.Data.JSON.Deserialize<CommandKey[]>(json);
+            var cmds = UMC.Data.JSON.Deserializes<WebMeta>(json);
 
             _cmds = new Queue<CommandKey>();
 
             foreach (var c3 in cmds)
             {
-                _cmds.Enqueue(c3);
+                _cmds.Enqueue(new CommandKey { cmd = c3["cmd"], model = c3["model"], value = c3["value"] });
             };
             if (cmds.Length > 0)
             {
@@ -289,104 +310,101 @@ namespace UMC.Web
             this.Send(model, cmd, hash);
 
         }
+        public static bool Verify(UMC.Security.Identity user, string model, string cmd)
+        {
+            return Verify(user, 0, model, cmd, WebRuntime.authKeys);
+        }
+        public static bool Verify(UMC.Security.Identity user, int site, string model, string cmd, Dictionary<String, WebAuthType> auths)
+        {
+            String key = $"{model}.{cmd}";
+
+            WebAuthType authType;
+            if (auths.TryGetValue(key, out authType) == false)
+            {
+                if (auths.TryGetValue(model, out authType) == false)
+                {
+                    return true;
+                }
+
+            }
+
+            switch (authType)
+            {
+                case WebAuthType.All:
+                    return true;
+                case WebAuthType.User:
+                    if (user.IsInRole(Security.AccessToken.UserRole))
+                    {
+                        return true;
+
+                    }
+                    break;
+                case WebAuthType.UserCheck:
+                    if (user.IsInRole(Security.AccessToken.AdminRole))
+                    {
+                        return true;
+
+                    }
+                    else if (user.IsInRole(Security.AccessToken.UserRole))
+                    {
+                        if (UMC.Data.Reflection.Instance().IsAuthorization(user, site, $"UMC/{model}/{cmd}"))
+                        {
+                            return true;
+                        }
+                    }
+                    break;
+                case WebAuthType.Check:
+                    if (user.IsInRole(Security.AccessToken.AdminRole))
+                    {
+                        return true;
+
+                    }
+                    else if (UMC.Data.Reflection.Instance().IsAuthorization(user, site, $"UMC/{model}/{cmd}"))
+                    {
+                        return true;
+                    }
+
+                    break;
+                case WebAuthType.Admin:
+                    if (user.IsInRole(Security.AccessToken.AdminRole))
+                    {
+                        return true;
+
+                    }
+                    break;
+                case WebAuthType.Guest:
+                    if (user.IsAuthenticated)
+                    {
+                        return true;
+
+                    }
+                    break;
+            }
+            return false;
+        }
 
         bool Verify(string model, string cmd)
         {
             if (this.IsVerify.HasValue == false)
             {
-                String key = String.Format("{0}.{1}", model, cmd);
-                WebAuthType authType = WebAuthType.Check;
-                if (WebRuntime.authKeys.ContainsKey(key))
-                {
-                    authType = WebRuntime.authKeys[key];
-                }
-                else if (WebRuntime.authKeys.ContainsKey(model))
-                {
-                    authType = WebRuntime.authKeys[model];
-                }
                 var user = this.Token.Identity();
 
-                switch (authType)
+                if (Verify(user, 0, model, cmd, WebRuntime.authKeys))
                 {
-                    case WebAuthType.All:
-                        this.IsVerify = true;
-                        return true;
-                    case WebAuthType.User:
-                        if (user.IsInRole(Security.AccessToken.UserRole))
-                        {
-                            this.IsVerify = true;
-                            return true;
-
-                        }
-                        break;
-                    case WebAuthType.UserCheck:
-                        if (user.IsInRole(Security.AccessToken.AdminRole))
-                        {
-                            this.IsVerify = true;
-                            return true;
-
-                        }
-                        else if (user.IsInRole(Security.AccessToken.UserRole))
-                        {
-                            if (UMC.Data.Reflection.Instance().IsAuthorization(user, String.Format("UMC/{0}/{1}", model, cmd)))
-                            {
-                                this.IsVerify = true;
-                                return true;
-                            }
-                        }
-                        break;
-                    case WebAuthType.Check:
-                        if (user.IsInRole(Security.AccessToken.AdminRole))
-                        {
-                            this.IsVerify = true;
-                            return true;
-
-                        }
-                        else if (UMC.Data.Reflection.Instance().IsAuthorization(user, String.Format("UMC/{0}/{1}", model, cmd)))
-                        {
-                            this.IsVerify = true;
-                            return true;
-                        }
-
-                        break;
-                    case WebAuthType.Admin:
-                        if (user.IsInRole(Security.AccessToken.AdminRole))
-                        {
-                            this.IsVerify = true;
-                            return true;
-
-                        }
-                        break;
-                    case WebAuthType.Guest:
-                        if (user.IsAuthenticated)
-                        {
-                            this.IsVerify = true;
-                            return true;
-
-                        }
-                        else
-                        {
-                            this.OuterHeaders = new Hashtable();
-                            this.ClientEvent = WebEvent.Prompt | WebEvent.DataEvent;
-                            this.OuterHeaders["Prompt"] = new WebMeta().Put("Title", "提示", "Text", "您没有登录,请登录");
-
-                            this.OuterHeaders["DataEvent"] = new WebMeta().Put("type", "Login");
-                            return false;
-                        }
+                    this.IsVerify = true;
+                    return true;
                 }
-
                 this.OuterHeaders = new Hashtable();
-                this.ClientEvent = WebEvent.Prompt;
-                if (user.IsInRole(Security.AccessToken.UserRole) == false)
+                if (user.IsAuthenticated)
                 {
-                    this.OuterHeaders["Prompt"] = new WebMeta().Put("Title", "提示", "Text", "您没有登录或权限受限");
-                    //this.ClientEvent = WebEvent.Prompt | WebEvent.DataEvent;
-                    //this.OuterHeaders["DataEvent"] = new WebMeta().Put("type", "Close");
+                    this.ClientEvent = WebEvent.Prompt;
+                    this.OuterHeaders["Prompt"] = new WebMeta().Put("Title", "提示", "Text", "权限受限");
                 }
                 else
                 {
-                    this.OuterHeaders["Prompt"] = new WebMeta().Put("Title", "提示", "Text", "您的权限受限,请与管理员联系");
-
+                    this.ClientEvent = WebEvent.Prompt | WebEvent.DataEvent;
+                    this.OuterHeaders["Prompt"] = new WebMeta().Put("Title", "提示", "Text", "您没有登录,请登录");
+                    this.OuterHeaders["DataEvent"] = new WebMeta().Put("type", "Login");
                 }
                 return false;
 
@@ -524,7 +542,7 @@ namespace UMC.Web
 
         }
         WebMeta _Redirect;
-        public void Atfer(WebContext context)
+        internal void Atfer(WebContext context)
         {
 
             var request = context.Request;

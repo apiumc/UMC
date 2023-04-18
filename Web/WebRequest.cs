@@ -47,7 +47,7 @@ namespace UMC.Web
         /// 是否是消费者App
         /// </summary>
         public bool IsApp => client.IsApp; 
-        public System.IO.Stream InputStream=>   client.InputStream; 
+        //public System.IO.Stream InputStream=>   client.InputStream; 
         
         private WebClient client;
 

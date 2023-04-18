@@ -12,19 +12,39 @@ namespace UMC.Web
     /// </summary>
     public class UISheetDialog : UIDialog
     {
-        List<UIClick> _nSource = new List<UIClick>();
+        List<UMC.Data.IJSON> _nSource = new List<UMC.Data.IJSON>();
 
-
-
-        /// <summary>
-        /// 文本对话框选择配置
-        /// </summary>
-        public List<UIClick> Options
+        public int Count
         {
             get
             {
-                return _nSource;
+                return _nSource.Count;
             }
+        }
+        public UISheetDialog Put(UIClick click)
+        {
+            _nSource.Add(click);
+            return this;
+        }
+        public UISheetDialog Cells(int cells)
+        {
+            this.Config.Put("Cells", cells);
+            return this;
+        }
+        public UISheetDialog Put(string text)
+        {
+            _nSource.Add(new ListItem(text));
+            return this;
+        }
+        public UISheetDialog Put(string text, string value)
+        {
+            _nSource.Add(new ListItem(text, value));
+            return this;
+        }
+        public UISheetDialog Put(ListItem item)
+        {
+            _nSource.Add(item);
+            return this;
         }
         protected override void Initialization(WebContext context)
         {

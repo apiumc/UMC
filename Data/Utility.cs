@@ -13,6 +13,44 @@ namespace UMC.Data
     /// </summary>
     public class Utility
     {
+        public static int Search<T>(T[] values, T value, IComparer<T> comparer)
+        {
+            return Search(values, 0, values.Length, value, comparer);
+        }
+
+        public static int Search<T>(T[] values, int index, int length, T value, IComparer<T> comparer)
+        {
+
+            int lo = index;
+            int hi = index + length - 1;
+            while (lo <= hi)
+            {
+                int i = lo + ((hi - lo) >> 1);
+                int order = comparer.Compare(values[i], value);
+
+                if (order == 0) return i;
+                if (order < 0)
+                {
+                    lo = i + 1;
+                }
+                else
+                {
+                    hi = i - 1;
+                }
+            }
+
+            return ~lo;
+        }
+        public static Dictionary<String, Object> AppendDictionary(UMC.Data.Record record)
+        {
+            var vs = new Dictionary<String, Object>();
+            record.GetValues((t, v) => vs.Add(t, v));
+            return vs;
+        }
+        public static void AppendDictionary(UMC.Data.Record record, IDictionary vs)
+        {
+            record.GetValues((t, v) => vs[t] = v);
+        }
         static bool IgnoreCase(byte bf, byte b)
         {
             if (bf == b)
@@ -31,6 +69,31 @@ namespace UMC.Data
             {
                 return false;
             }
+        }
+        static String[] units = new String[] { "B", "KB", "MB", "GB", "TB", "PB" };
+        public static string GetBitSize(long c)
+        {
+            var b = Math.Abs(c);
+            long mod = 1000;
+            var lmod = 1L;
+            int i = 0;
+            while (b >= mod)
+            {
+                lmod *= mod;
+                b /= mod;
+                i++;
+            }
+            if (c < 0)
+            {
+                b = -b;
+            }
+            if (i > 0)
+            {
+                var v = (Math.Abs(c) % lmod) / (lmod / 10);
+                return $"{b}.{v}{units[i]}";
+            }
+            return b + units[i];
+
         }
         public static int FindIndex(byte[] bf, int offset, int end, byte[] search)
         {
@@ -171,11 +234,11 @@ namespace UMC.Data
         }
         public static string QRUrl(string chl)
         {
-            return String.Format("https://www.365lu.cn/QR/{0}.svg?chl={1}", Parse62Encode(IntParse(Guid(chl, true).Value)), Uri.EscapeDataString(chl));
+            return String.Format("https://res.apiumc.com/QR/{0}.svg?chl={1}", Parse62Encode(IntParse(Guid(chl, true).Value)), Uri.EscapeDataString(chl));
         }
         public static string QR128Url(string chl)
         {
-            return String.Format("https://www.365lu.cn/QR/{0}.svg?t=128&chl={1}", Parse62Encode(IntParse(Guid(chl, true).Value)), Uri.EscapeDataString(chl));
+            return String.Format("https://res.apiumc.com/QR/{0}.svg?t=128&chl={1}", Parse62Encode(IntParse(Guid(chl, true).Value)), Uri.EscapeDataString(chl));
         }
 
 
@@ -395,6 +458,19 @@ namespace UMC.Data
             uint v = BitConverter.ToUInt32(BitConverter.GetBytes(i), 0);
             return NumberCode(v, l);
         }
+        public static void Move(String sfile, string dfile)
+        {
+            if (!System.IO.Directory.Exists(System.IO.Path.GetDirectoryName(dfile)))
+            {
+                System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(dfile));
+            }
+            if (File.Exists(dfile))
+            {
+                File.Delete(dfile);
+            }
+            //if(String.)
+            File.Move(sfile, dfile);
+        }
         public static void Copy(System.IO.Stream d, string file)
         {
             if (!System.IO.Directory.Exists(System.IO.Path.GetDirectoryName(file)))
@@ -408,18 +484,9 @@ namespace UMC.Data
 
             using (System.IO.Stream sWriter = File.Open(file, FileMode.Create))
             {
-                Copy(d, sWriter);
+                d.CopyTo(sWriter);
+                sWriter.Flush();
                 sWriter.Close();
-            }
-        }
-        public static void Copy(System.IO.Stream d, System.IO.Stream t)
-        {
-            var buffer = new byte[1024];
-            int i = d.Read(buffer, 0, 1024);
-            while (i > 0)
-            {
-                t.Write(buffer, 0, i);
-                i = d.Read(buffer, 0, 1024);
             }
         }
         /// <summary>
@@ -597,12 +664,20 @@ namespace UMC.Data
         /// <returns></returns>
         public static string ParseEncode(int value, int p)
         {
+
+            return ParseEncode(BitConverter.ToUInt32(BitConverter.GetBytes(value), 0), p);
+
+
+        }
+
+        public static string ParseEncode(ulong i, int p)
+        {
             if (p > 1 && p < 63)
             {
-                var i = BitConverter.ToUInt32(BitConverter.GetBytes(value), 0);
                 var sb = new StringBuilder();
-                uint j = 0, p2 = (uint)p;
-                while (i > p - 1)
+                ulong j = 0, p2 = (ulong)p;
+
+                while (i > ((ulong)(p - 1)))
                 {
                     j = i % p2;
                     sb.Insert(0, STR_DE62[(int)j]);
@@ -612,7 +687,7 @@ namespace UMC.Data
 
                 return sb.ToString();
             }
-            throw new ArgumentOutOfRangeException("p");
+            throw new ArgumentOutOfRangeException("p", "p > 1 && p < 63");
         }
         private static int _Conver(char c)
         {
@@ -642,7 +717,7 @@ namespace UMC.Data
         /// </summary>
         public static int Parse62Decode(string value)
         {
-            return ParseDecode(value, 62);
+            return (int)ParseDecode(value, 62);
         }
         /// <summary>
         /// 把2-62之间的进制转化为十进制
@@ -650,7 +725,7 @@ namespace UMC.Data
         /// <param name="value"></param>
         /// <param name="p"></param>
         /// <returns></returns>
-        public static int ParseDecode(string value, int p)
+        public static ulong ParseDecode(string value, int p)
         {
             uint v = 0;
             int l = value.Length, l2 = l;
@@ -676,12 +751,12 @@ namespace UMC.Data
                 return 0;
             }
             v += Convert.ToUInt32(c);
-            return BitConverter.ToInt32(BitConverter.GetBytes(v), 0);
+            return v;// BitConverter.ToInt32(BitConverter.GetBytes(v), 0);
         }
         public static int Parse36Decode(string value)
         {
             value = value.ToLower();
-            return ParseDecode(value, 36);
+            return (int)ParseDecode(value, 36);
         }
 
         public static String SHA256(String s)
@@ -1161,10 +1236,6 @@ namespace UMC.Data
             {
                 action(a);
             }
-            //for (int i = 0; i < args.Length; i++)
-            //{
-            //    action(args[i]);
-            //}
         }
         /// <summary>
         /// 采用追加的方式写入文件
@@ -1196,9 +1267,13 @@ namespace UMC.Data
             return File.Open(file, append ? FileMode.Append : FileMode.Create, FileAccess.Write, FileShare.ReadWrite);
 
         }
-        public static bool Writer(string file, string context)
+        public static bool Append(string file, string context)
         {
             return Writer(file, context, true);
+        }
+        public static bool Writer(string file, string context)
+        {
+            return Writer(file, context, false);
 
         }
         /// <summary>
@@ -1470,6 +1545,7 @@ namespace UMC.Data
             Array.Copy(BitConverter.GetBytes(_NewId), 0, b, 2, 2);
             Array.Copy(BitConverter.GetBytes(_ProcessId), 0, b, 0, 2);
             Array.Copy(BitConverter.GetBytes(Utility.TimeSpan()), 0, b, 4, 4);
+
             return BitConverter.ToUInt64(b, 0);
         }
         /// <summary>

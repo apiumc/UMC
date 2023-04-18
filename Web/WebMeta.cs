@@ -22,6 +22,10 @@ namespace UMC.Web
             }
 
         }
+        public WebMeta Clone()
+        {
+            return new WebMeta(this);
+        }
         /// <summary>
         /// 获取字典
         /// </summary>
@@ -133,6 +137,15 @@ namespace UMC.Web
                 var k = new WebMeta(obj as IDictionary);
                 _Dictionary[key] = k;
                 return k;
+            }
+
+            if (obj is string)
+            {
+                var str = obj as string;
+                if (str.StartsWith("{") && str.EndsWith("}"))
+                {
+                    return UMC.Data.JSON.Deserialize<WebMeta>(str);
+                }
             }
             return null;
         }

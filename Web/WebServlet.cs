@@ -1,35 +1,61 @@
 ﻿using System;
 using System.Net;
-using System.Net.Sockets;
-using System.Linq;
-using System.Threading;
 using System.Collections.Specialized;
-using System.IO.Compression;
-using System.Collections;
 using System.Collections.Generic;
 using UMC.Data;
 using UMC.Net;
-using System.Net.Cache;
 using System.IO;
+using System.Buffers;
 
 namespace UMC.Web
 {
     /// <summary>
     /// WebServlet处理
     /// </summary>
-    public abstract class WebServlet : UMC.Net.INetHandler
+    public class WebServlet : UMC.Net.INetHandler
     {
-        void Temp(UMC.Net.NetContext context)
+        protected void Temp(UMC.Net.NetContext context)
         {
-            var file = context.Url.LocalPath.Substring(5);
-            string filename = UMC.Data.Reflection.ConfigPath(String.Format("Static\\TEMP\\{0}", file));
+            var file = context.Url.LocalPath.Substring(context.Url.LocalPath.IndexOf('/', 2) + 1);
+            file = UMC.Data.Reflection.ConfigPath(String.Format("Static\\TEMP\\{0}", file));
             switch (context.HttpMethod)
             {
                 case "GET":
-                    File(context, filename);
+                    File(context, file);
                     break;
                 case "PUT":
-                    Utility.Copy(context.InputStream, filename);
+                    if (!System.IO.Directory.Exists(System.IO.Path.GetDirectoryName(file)))
+                    {
+                        System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(file));
+                    }
+                    if (System.IO.File.Exists(file))
+                    {
+                        System.IO.File.Delete(file);
+                    }
+
+                    System.IO.Stream sWriter = System.IO.File.Open(file, FileMode.Create);
+                    context.ReadAsData((b, i, c) =>
+                    {
+                        if (c == 0 && b.Length == 0)
+                        {
+                            if (i == -1)
+                            {
+                                sWriter.Close();
+                                System.IO.File.Delete(file);
+
+                            }
+                            else
+                            {
+                                sWriter.Close();
+                                sWriter.Dispose();
+                            }
+                            context.OutputFinish();
+                        }
+                        else
+                        {
+                            sWriter.Write(b, i, c);
+                        }
+                    });
                     break;
             }
         }
@@ -44,9 +70,8 @@ namespace UMC.Web
                 context.StatusCode = 404;
             }
         }
-        protected void TransmitFile(UMC.Net.NetContext context, String file, bool isCache)
+        protected virtual void TransmitFile(UMC.Net.NetContext context, String file, bool isCache)
         {
-
             var lastIndex = file.LastIndexOf('.');
 
             var extName = "html";
@@ -84,6 +109,9 @@ namespace UMC.Web
                 case "gif":
                     context.ContentType = "image/gif";
                     break;
+                case "webp":
+                    context.ContentType = "image/webp";
+                    break;
                 case "jpeg":
                 case "jpg":
                     context.ContentType = "image/jpeg";
@@ -110,35 +138,129 @@ namespace UMC.Web
                     context.ContentType = "application/octet-stream";
                     break;
             }
+            var fileInfo = new System.IO.FileInfo(file);
+            var Modified = fileInfo.LastWriteTimeUtc.ToString("r");
+            context.AddHeader("Last-Modified", Modified);
             if (isCache)
             {
-                var fileInfo = new System.IO.FileInfo(file);
-
-                context.AddHeader("Last-Modified", fileInfo.LastWriteTimeUtc.ToString("r"));
                 var Since = context.Headers["If-Modified-Since"];
                 if (String.IsNullOrEmpty(Since) == false)
                 {
-                    try
-                    {
-                        var time = Convert.ToDateTime(Since);
-                        if (time >= fileInfo.LastWriteTimeUtc)
-                        {
-                            context.StatusCode = 304;
-                            return;
 
-                        }
+                    if (String.Equals(Modified, Since))
+                    {
+                        context.StatusCode = 304;
+                        return;
+
                     }
-                    catch
-                    {
+                }
+            }
+            var range = context.Headers["Range"];
 
+            if (String.IsNullOrEmpty(range) == false)
+            {
+                var IfSince = context.Headers["If-Range"];
+                if (String.IsNullOrEmpty(IfSince) == false)
+                {
+                    if (String.Equals(IfSince, Modified) == false)
+                    {
+                        range = String.Empty;
                     }
                 }
             }
             using (System.IO.FileStream stream = System.IO.File.OpenRead(file))
             {
-                context.ContentLength = stream.Length;
+                byte[] array = ArrayPool<byte>.Shared.Rent(1024);
+                try
+                {
+                    if (String.IsNullOrEmpty(range) == false && range.StartsWith("bytes=") && context.StatusCode == 200)
+                    {
+                        var rg = range.Substring(6).Trim().Split(',')[0];
 
-                stream.CopyTo(context.OutputStream);
+                        int start = 0, len = -1;
+                        if (rg.StartsWith("-"))
+                        {
+                            start = UMC.Data.Utility.IntParse(rg, 0);
+                            len = Math.Abs(start);
+                        }
+                        else if (rg.EndsWith("-"))
+                        {
+                            start = UMC.Data.Utility.IntParse(rg.Substring(0, rg.Length - 1), 0);
+                        }
+                        else
+                        {
+                            var rs = rg.Split('-');
+                            start = UMC.Data.Utility.IntParse(rs[0], 0);
+                            len = UMC.Data.Utility.IntParse(rs[1], 0) - start + 1;
+                        }
+                        if (start < 0)
+                        {
+                            start = (int)stream.Seek(start, SeekOrigin.End);
+                        }
+                        else if (start < stream.Length)
+                        {
+                            stream.Seek(start, SeekOrigin.Begin);
+
+                        }
+                        var endLen = (int)(stream.Length - start);
+                        if (len == -1 || len > endLen)
+                        {
+                            len = endLen;
+                        }
+                        if (len > 0)
+                        {
+                            context.StatusCode = 206;
+                            context.AddHeader("Content-Range", $"bytes {start}-{start + len - 1}/{stream.Length}");
+
+                            context.ContentLength = len;
+                            int count2 = 0;
+
+
+                            while (len > 0)
+                            {
+                                count2 = stream.Read(array, 0, array.Length);
+
+                                if (count2 == 0)
+                                {
+                                    break;
+                                }
+                                else if (count2 > len)
+                                {
+                                    context.OutputStream.Write(array, 0, len);
+                                    break;
+                                }
+                                else
+                                {
+                                    context.OutputStream.Write(array, 0, count2);
+                                }
+                                len -= count2;
+                            }
+                        }
+                        else
+                        {
+                            context.ContentType = " text/plain";
+                            context.StatusCode = 416;
+
+                            context.Output.Write($"416 {UMC.Net.HttpStatusDescription.Get(416)}");
+                        }
+
+                    }
+                    else
+                    {
+                        context.AddHeader("Accept-Ranges", "bytes");
+
+                        context.ContentLength = stream.Length;
+                        int count;
+                        while ((count = stream.Read(array, 0, array.Length)) != 0)
+                        {
+                            context.OutputStream.Write(array, 0, count);
+                        }
+                    }
+                }
+                finally
+                {
+                    ArrayPool<byte>.Shared.Return(array);
+                }
 
             }
 
@@ -152,16 +274,16 @@ namespace UMC.Web
             }
             context.AddHeader("Access-Control-Allow-Origin", "*");
             context.AddHeader("Access-Control-Allow-Credentials", "true");
-            //context.AddHeader("Access-Control-Allow-Methods", "*");
-            //context.AddHeader("Access-Control-Allow-Headers", "x-requested-with,content-type");
             context.AddHeader("Cache-Control", "no-cache");
-
+            context.UseSynchronousIO(() => { });
             var QueryString = new NameValueCollection(context.QueryString);
-            QueryString.Add(context.Form);
-
-            var model = QueryString["_model"];
-            var cmd = QueryString["_cmd"];
-            Process(QueryString, context.Url, context, model, cmd);
+            context.ReadAsForm(r =>
+            {
+                QueryString.Add(r);
+                var model = QueryString["_model"];
+                var cmd = QueryString["_cmd"];
+                Process(QueryString, context.Url, context, model, cmd);
+            });
         }
 
 
@@ -211,7 +333,6 @@ namespace UMC.Web
                     , String.IsNullOrEmpty(roles) ? new String[0] : roles.Split(',')
                     , String.IsNullOrEmpty(organizes) ? new String[0] : organizes.Split(','));
 
-                //var sid = ;
                 var token = new UMC.Security.AccessToken(new Guid(UMC.Data.Utility.MD5("umc.request", id, name, roles, organizes, alias)));
                 token.Login(user, 0);
                 return token;
@@ -242,7 +363,9 @@ namespace UMC.Web
                 }
                 if (paths.Count > 2)
                 {
-                    queryString.Add(null, paths[2]);
+                    paths.RemoveAt(0);
+                    paths.RemoveAt(0);
+                    queryString.Add(null, String.Join("/", paths));
 
                 }
             }
@@ -269,9 +392,10 @@ namespace UMC.Web
 
             if (String.IsNullOrEmpty(model))
             {
-                context.ContentType = "text/plain";
                 context.StatusCode = 404;
+                context.ContentType = "text/plain";
                 context.Output.Write("Model is empty");
+                context.OutputFinish();
             }
             else if (String.IsNullOrEmpty(cmd))
             {
@@ -292,6 +416,7 @@ namespace UMC.Web
                     context.StatusCode = 404;
                     context.ContentType = "text/plain";
                     context.Output.Write("Command is empty");
+                    context.OutputFinish();
                 }
 
             }
@@ -325,7 +450,7 @@ namespace UMC.Web
                     return;
                 }
             }
-            var url = new Uri($"https://res.apiumc.com{path}?v.05");
+            var url = new Uri($"https://res.apiumc.com{path}?v{UMC.Data.Utility.TimeSpan()}");
             if (context.AllowSynchronousIO == false)
             {
                 context.UseSynchronousIO(() => { });
@@ -385,14 +510,53 @@ namespace UMC.Web
                         Process(context);
                         return;
                     }
-                    else if (paths.Count > 1)
-                    {
-                        Process(context);
-                        return;
-                    }
                     else
                     {
-                        IndexResource(context);
+                        switch (context.HttpMethod)
+                        {
+                            case "GET":
+                                switch (paths.Count)
+                                {
+                                    case 2:
+                                    case 1:
+                                        IndexResource(context);
+                                        break;
+                                    case 3:
+                                        if (context.Url.LocalPath.EndsWith("/"))
+                                        {
+                                            PageResource(context);
+                                        }
+                                        else
+                                        {
+
+                                            IndexResource(context);
+                                        }
+                                        break;
+                                    default:
+                                        if (context.Url.LocalPath.EndsWith("/"))
+                                        {
+
+                                            PageResource(context);
+                                        }
+                                        else
+                                        {
+
+                                            Process(context);
+                                        }
+                                        break;
+                                }
+                                break;
+                            case "OPTIONS":
+
+                                context.AddHeader("Access-Control-Allow-Origin", "*");
+                                context.AddHeader("Access-Control-Allow-Credentials", "true");
+                                context.AddHeader("Cache-Control", "no-cache");
+                                context.AddHeader("Access-Control-Allow-Headers", "Referer-Path");
+                                break;
+                            default:
+                                Process(context);
+                                break;
+                        }
                         return;
                     }
                 case "UMC.UI":
@@ -411,7 +575,7 @@ namespace UMC.Web
 
 
         }
-        static String toPath(String path)
+        protected static String FilePath(String path)
         {
             var sb = new System.Text.StringBuilder();
             char last = char.MinValue;
@@ -439,52 +603,93 @@ namespace UMC.Web
         {
 
             var path = context.Url.AbsolutePath;
-            var file = toPath(dir + path);
-            if (System.IO.File.Exists(file))
+            var file = FilePath(dir + path);
+
+            try
             {
-                TransmitFile(context, file, true);
+                if (System.IO.File.Exists(file))
+                {
+                    TransmitFile(context, file, true);
+                    return;
+                }
+                if (path.IndexOf('.', path.LastIndexOf('/')) == -1)
+                {
+                    var staticFile = FilePath(file + "/index.html");
+
+                    if (System.IO.File.Exists(staticFile))
+                    {
+                        TransmitFile(context, staticFile, true);
+                        return;
+
+                    }
+                }
+                var lastIndex = file.LastIndexOf('.');
+                var extName = "html";
+                if (lastIndex > -1)
+                {
+                    extName = file.Substring(lastIndex + 1);
+                }
+                NotFound(context, extName, dir);
+
+            }
+            finally
+            {
+
                 if (context.AllowSynchronousIO)
                 {
                     context.OutputFinish();
                 }
+            }
+        }
+        protected void NotFound(Net.NetContext context, string extName, string dir)
+        {
+
+
+            var fok404 = FilePath($"{dir}/404.OK.{extName}");
+            if (System.IO.File.Exists(fok404))
+            {
+                context.StatusCode = 200;
+                TransmitFile(context, fok404, false);
                 return;
             }
-            if (path.IndexOf('.', path.LastIndexOf('/')) == -1)
-            {
-                var staticFile = toPath(file + "/index.html");
-
-                if (System.IO.File.Exists(staticFile))
-                {
-                    TransmitFile(context, staticFile, true);
-                    return;
-                }
-                else
-                {
-                    var dir404 = toPath($"{dir}/404.dir.html");
-                    if (System.IO.File.Exists(dir404))
-                    {
-                        context.StatusCode = 203;
-                        TransmitFile(context, dir404, false);
-                        return;
-                    }
-                }
-            }
-
-
-            var f404 = toPath($"{dir}/404.html");
+            var f404 = FilePath($"{dir}/404.{extName}");
+            context.StatusCode = 404;
             if (System.IO.File.Exists(f404))
             {
-                context.StatusCode = 404;
                 TransmitFile(context, f404, false);
             }
             else
             {
                 context.StatusCode = 404;
-                IndexResource(context);
+                switch (extName)
+                {
+                    case "html":
+                        break;
+                    default:
+                        f404 = FilePath($"{dir}/404.html");
+                        if (System.IO.File.Exists(f404))
+                        {
+                            TransmitFile(context, f404, false);
+                        }
+                        break;
+                }
+            }
+
+        }
+        protected virtual void PageResource(Net.NetContext context)
+        {
+            context.ContentType = "text/html";
+
+
+            using (System.IO.Stream stream = typeof(WebServlet).Assembly
+                               .GetManifestResourceStream("UMC.Resources.page.html"))
+            {
+                context.ContentLength = stream.Length;
+                stream.CopyTo(context.OutputStream);
+
             }
         }
-
-        void IndexResource(Net.NetContext context)
+        protected virtual void IndexResource(Net.NetContext context)
         {
             context.ContentType = "text/html";
 
@@ -573,7 +778,7 @@ namespace UMC.Web
                     var em3 = em.Current.Value.GetEnumerator();
                     while (em3.MoveNext())
                     {
-                        var mappings = em3.Current.Value.GetCustomAttributes(typeof(MappingAttribute), false);
+                        var mappings = em3.Current.Value.Type.GetCustomAttributes(typeof(MappingAttribute), false);
                         MappingAttribute mapping = (MappingAttribute)mappings[0];
                         if (mappings.Length > 1)
                         {
@@ -591,7 +796,7 @@ namespace UMC.Web
                         WebAuthType authType = mapping.Auth;
 
                         WebMeta meta = new WebMeta();
-                        meta.Put("type", em3.Current.Value.FullName);
+                        meta.Put("type", em3.Current.Value.Type.FullName);
                         meta.Put("name", em.Current.Key + "." + em3.Current.Key);
                         meta.Put("auth", authType.ToString().ToLower());
                         meta.Put("model", mapping.Model);

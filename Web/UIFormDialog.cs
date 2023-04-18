@@ -40,7 +40,7 @@ namespace UMC.Web
         {
             this.Menu(this.CreateMenu(text, model, cmd, ""));
         }
-        public void Menu(params WebMeta[] menus)
+        void Menu(params WebMeta[] menus)
         {
             this.Config.Put("menu", menus);
         }
@@ -72,7 +72,7 @@ namespace UMC.Web
         /// <param name="asyncId">异步值Id</param>
         /// <param name="callback">对话框回调方法</param>
         /// <returns></returns>
-        public static new WebMeta AsyncDialog(WebContext context, string asyncId, AsyncDialogCallback callback)
+        public static new WebMeta AsyncDialog(WebContext context, string asyncId, Func<String, UIDialog> callback)
         {
             return GetAsyncValue(context, asyncId, false, callback, false) as WebMeta;
         }
@@ -122,7 +122,7 @@ namespace UMC.Web
         /// <param name="title"></param>
         /// <param name="Code"></param>
         /// <param name="defaultValue"></param>
-        public void AddPhone(string title, string Code, string defaultValue)
+        public WebMeta AddPhone(string title, string Code, string defaultValue)
         {
             WebMeta v = new WebMeta();
             v["Title"] = title;
@@ -131,6 +131,7 @@ namespace UMC.Web
             v["Vtype"] = "Phone";
             v["Name"] = Code;
             this.dataSrouce.Add(v);
+            return v;
         }
         /// <summary>
         /// 增加数字输入框
@@ -159,6 +160,10 @@ namespace UMC.Web
             this.dataSrouce.Add(v);
             return v;
 
+        }
+        public void AddHeader(UIHeader header)
+        {
+            this.Config.Put("Header", header);
         }
         /// <summary>
         /// 增加数字输入框
@@ -240,6 +245,14 @@ namespace UMC.Web
             v["Type"] = "Prompt";
             v["Name"] = UMC.Data.Utility.Parse62Encode(Guid.NewGuid().GetHashCode());
             this.dataSrouce.Add(v);
+        }
+        public void AddPrompt(string format, WebMeta data, UIStyle style)
+        {
+            data.Put("Format", format);
+            data.Put("Style", style);
+            data["Type"] = "Prompt";
+            data["Name"] = UMC.Data.Utility.Parse62Encode(Guid.NewGuid().GetHashCode());
+            this.dataSrouce.Add(data);
         }
         /// <summary>
         /// 条码输入框，
@@ -699,56 +712,6 @@ namespace UMC.Web
             this.dataSrouce[this.dataSrouce.Count - 1].Put("Submit", "YES");
         }
         /// <summary>
-        /// 事件提交参数配置
-        /// </summary>
-        /// <param name="btnName">提交按钮名称</param>
-        /// <param name="model">提交的模块</param>
-        /// <param name="cmd">提交的指令</param>
-        /// <param name="param">参数</param>
-        //public void Submit(String btnName, string model, string cmd, WebMeta param)
-        //{
-        //    var p = new WebMeta();
-        //    if (param != null && param.Count > 0)
-        //    {
-        //        p.Set("send", param);
-        //    }
-        //    p["model"] = model;
-        //    p["cmd"] = cmd;
-        //    if (String.IsNullOrEmpty(btnName) == false)
-        //    {
-        //        p["text"] = btnName;
-        //    }
-
-        //    this.Config.Set("Submit", p);
-        //    this.dataSrouce[this.dataSrouce.Count - 1].Put("Submit", "YES");
-
-        //}
-        //WebMeta submit;
-        /// <summary>
-        /// 事件提交参数配置
-        /// </summary>
-        /// <param name="btnName">提交按钮名称</param>
-        /// <param name="model">提交的模块</param>
-        /// <param name="cmd">提交的指令</param>
-        /// <param name="colseEvent">关闭对话框的事件</param>
-        //public void Submit(String btnName, string model, string cmd, params string[] colseEvent)
-        //{
-        //    var p = new WebMeta();
-
-        //    p["model"] = model;
-        //    p["cmd"] = cmd;
-        //    if (String.IsNullOrEmpty(btnName) == false)
-        //    {
-        //        p["text"] = btnName;
-        //    }
-        //    if (colseEvent.Length > 0)
-        //    {
-        //        this.Config.Put("CloseEvent", String.Join(",", colseEvent));
-        //    }
-        //    this.Config.Set("Submit", p);
-
-        //}
-        /// <summary>
         /// 不使用提交按钮
         /// </summary>
         public void HideSubmit()
@@ -769,7 +732,7 @@ namespace UMC.Web
             if (_isHideSubmit)
             {
                 this.Config.Put("Submit", false);
-                
+
             }
             else
             {

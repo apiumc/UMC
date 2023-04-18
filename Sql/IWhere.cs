@@ -8,7 +8,7 @@ namespace UMC.Data.Sql
     /// 实体类型的Where查询接口：注意他有父子级概念
     /// </summary>
 
-    public interface IWhere<T> where T : class
+    public interface IWhere<T> where T : Record, new()
     {
         /// <summary>
         /// 设置或获取设置的字段条件值
@@ -35,37 +35,6 @@ namespace UMC.Data.Sql
             get;
         }
 
-        /// <summary>
-        /// 配置Sql表达式的查询条件
-        /// </summary>
-        /// <param name="expression">sql表达式</param>
-        /// <param name="paramers">参数</param>
-        /// <returns></returns>
-        //IWhere Or(string expression, params Object[] paramers);
-
-        /// <summary>
-        /// 配置Sql表达式的查询条件
-        /// </summary>
-        /// <param name="expression">sql表达式</param>
-        /// <param name="paramers">参数</param>
-        /// <returns></returns>
-        //IWhere And(string expression, params Object[] paramers);
-        /// <summary>
-        ///获取 Or运算
-        /// </summary>
-        /// <returns></returns>
-        //IOperator Or();
-        ///// <summary>
-        /////获取 And运算
-        ///// </summary>
-        ///// <returns></returns>
-        //IOperator And();
-
-        /// <summary>
-        /// 创建带小括号 SQL WHERE条件，例如 ：(field1=1 AND field2=2)
-        /// </summary>
-        //IWhere Contains();
-        //}
         ///// <summary>
         ///// 实现实体查询
         ///// </summary>

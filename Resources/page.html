@@ -1,0 +1,54 @@
+﻿
+
+<!doctype html>
+<html>
+
+<head>
+    <title>API UMC</title>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0" />
+    <link href="/css/weui.css" rel="stylesheet" type="text/css" />
+    <link href="/css/base.css" rel="stylesheet" type="text/css" />
+    <link href="/css/icon.css" rel="stylesheet" type="text/css" />
+    <link href="/css/umc.ui.css" rel="stylesheet" type="text/css" />
+    <link href="/css/umc.css" rel="stylesheet" type="text/css" />
+    <script src="/js/umc.js"></script>
+    <script src="/UMC.Conf" type="text/javascript"></script>
+    <script src="/js/umc.database.js"></script>
+    <script src="/js/umc.grid.js"></script>
+    <script src="/js/umc.ui.js"></script>
+    <script src="/js/umc.dialog.js"></script>
+    <script src="/js/umc.page.js"></script>
+    <style>
+        body > div.ui:nth-of-type(1) .header .back {
+            display: none;
+        }
+
+
+        @media screen and (max-width: 560px) {
+            .wdk-dialog {
+                position: fixed;
+                width: 100% !important;
+            }
+        }
+    </style>
+    <script>UMC(function ($) {
+            // $(window).off('popstate').on('popstate', function (e, v) {
+            var pathname = location.pathname.substring(1).replace(/(^\/+)|(\/+$)/g, '');
+            var paths = pathname.split('/');
+            var key = paths.shift();
+            var search = {};
+            var model = paths.shift();
+            var cmd = paths.shift();
+            var search = $.query(location.search.substring(1));
+            if (paths.length) search._ = paths.join('/');
+            $.UI.Command(model, cmd, search);
+            //   }).on('popstate');
+        });</script>
+
+</head>
+
+<body>
+
+</body>
+</html>

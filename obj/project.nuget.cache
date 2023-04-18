@@ -1,11 +1,8 @@
 {
   "version": 2,
-  "dgSpecHash": "rzrYONShKXRb8arBLUS62zPIq8JlP7VUmR0LJ5t4tKQMjQ7nBVqjXntAJfRopNev7eWBidojFkyaaqQ6yLlG/g==",
+  "dgSpecHash": "GpvRiyQcX1fTA7HvCJQzJHffxHQnWytycilaFnJcZN59n4FQ9boA3P0yAA3hoVB6x+vIGtxFgfk11KbD25XSFA==",
   "success": true,
-  "projectFilePath": "/Users/wushunming/Documents/Static/UMC.Web/UMC.csproj",
-  "expectedPackageFiles": [
-    "/Users/wushunming/.nuget/packages/microsoft.netcore.platforms/1.1.0/microsoft.netcore.platforms.1.1.0.nupkg.sha512",
-    "/Users/wushunming/.nuget/packages/netstandard.library/2.0.3/netstandard.library.2.0.3.nupkg.sha512"
-  ],
+  "projectFilePath": "/Users/wushunming/Documents/APIUMC/UMC/UMC.csproj",
+  "expectedPackageFiles": [],
   "logs": []
 }

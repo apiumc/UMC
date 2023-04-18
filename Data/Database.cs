@@ -180,7 +180,7 @@ namespace UMC.Data
         /// 创建实体综合管理适配器
         /// </summary>
         /// <returns></returns>
-        public IObjectEntity<T> ObjectEntity<T>() where T : class
+        public IObjectEntity<T> ObjectEntity<T>() where T : Record, new()
         {
             return DbCommonFactory.ObjectEntity<T>();// (TimeOut);
         }
@@ -189,20 +189,18 @@ namespace UMC.Data
         /// 创建实体综合管理适配器
         /// </summary>
         /// <returns></returns>
-        public IObjectEntity<T> ObjectEntity<T>(string tabName) where T : class
+        public IObjectEntity<T> ObjectEntity<T>(string tabName) where T : Record, new()
         {
             return DbCommonFactory.ObjectEntity<T>(tabName);
         }
-
-        #region IDisposable Members
+ 
 
         void IDisposable.Dispose()
         {
             ((IDisposable)DbCommonFactory).Dispose();
             GC.SuppressFinalize(this);
         }
-
-        #endregion
+ 
     }
 }
 

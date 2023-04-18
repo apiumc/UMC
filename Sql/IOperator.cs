@@ -7,7 +7,7 @@ namespace UMC.Data.Sql
     /// <summary>
     /// 数据库操作运算符
     /// </summary>
-    public interface IOperator<T> where T : class
+    public interface IOperator<T> where T : Record, new()
     {
         /// <summary>
         /// 实体不等于 &gt;&gt;

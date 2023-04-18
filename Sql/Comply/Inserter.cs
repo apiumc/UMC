@@ -7,7 +7,7 @@ namespace UMC.Data.Sql
 {
     class Inserter : IInserter
     {
-        EntityHelper sqlTextHelper;
+
         DbProvider dbProvider;
         ISqler sqler;
         public Inserter(Sqler sqler)
@@ -18,13 +18,15 @@ namespace UMC.Data.Sql
 
         bool IInserter.Execute<T>(params T[] items)
         {
-            sqlTextHelper = new EntityHelper(this.dbProvider, typeof(T));
-            var em = items.GetEnumerator();
+            var sqlTextHelper = new EntityHelper(this.dbProvider, typeof(T).Name);
+
+            int i = 0;
             this.sqler.Execute(sc =>
             {
-                if (em.MoveNext())
+                if (i < items.Length)
                 {
-                    sc.Reset(sqlTextHelper.CreateInsertText(em.Current), sqlTextHelper.Arguments.ToArray());
+                    sc.Reset(sqlTextHelper.CreateInsertText(items[i]), sqlTextHelper.Arguments.ToArray());
+                    i++;
                     return true;
                 }
                 else
@@ -74,10 +76,10 @@ namespace UMC.Data.Sql
 
         int IInserter.ExecuteSingle(object obj)
         {
-            sqlTextHelper = new EntityHelper(this.dbProvider, obj.GetType());
-            string sqlText = sqlTextHelper.CreateInsertText(obj);
+            var sqlTextHelper = new EntityHelper(this.dbProvider, obj.GetType().Name);
+            string sqlText = sqlTextHelper.CreateInsertText(Reflection.PropertyToDictionary(obj));
             Insert(obj);
-            sqlText = sqlText + "\r\n" + this.dbProvider.GetIdentityText(sqlTextHelper.TableInfo.Name);
+            sqlText = sqlText + "\r\n" + this.dbProvider.GetIdentityText(sqlTextHelper.TableName);
 
             return Convert.ToInt32(this.sqler.ExecuteScalar(sqlText, sqlTextHelper.Arguments.ToArray()));
 
@@ -85,19 +87,16 @@ namespace UMC.Data.Sql
         }
         bool Insert(object value)
         {
-            string sqlText = sqlTextHelper.CreateInsertText(value);
-
-            return this.sqler.ExecuteNonQuery(sqlTextHelper.CreateInsertText(value), sqlTextHelper.Arguments.ToArray()) == 1;
+            var sqlTextHelper = new EntityHelper(this.dbProvider, value.GetType().Name);
+            string sqlText = sqlTextHelper.CreateInsertText(Reflection.PropertyToDictionary(value));
+            return this.sqler.ExecuteNonQuery(sqlText, sqlTextHelper.Arguments.ToArray()) == 1;
         }
         int IInserter.Execute(System.Data.IDataReader reader, string table)
         {
 
             var tablename = "{pfx}" + table;
 
-            //if (dbProvider.Prefixion.IndexOf('.') == -1)
-            //{
-            //    tablename = String.Format("{1}{0}{2}", tablename, dbProvider.QuotePrefix, dbProvider.QuoteSuffix);
-            //}
+
             System.Text.StringBuilder sb = new StringBuilder();
             sb.AppendFormat("INSERT INTO {0}(", tablename); ;
 
@@ -149,13 +148,14 @@ namespace UMC.Data.Sql
 
             int i = 0, c = values.Length;
 
+            System.Text.StringBuilder sb = new StringBuilder();
+            System.Text.StringBuilder sb2 = new StringBuilder();
             this.sqler.Execute(script =>
             {
                 if (i < c)
                 {
-                    System.Text.StringBuilder sb = new StringBuilder();
-
-                    System.Text.StringBuilder sb2 = new StringBuilder();
+                    sb.Clear();
+                    sb2.Clear();
                     sb.AppendFormat("INSERT INTO {0}(", tablename);
                     bool isE = false;
                     var dm = values[i].GetEnumerator();

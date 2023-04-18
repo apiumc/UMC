@@ -24,14 +24,6 @@ namespace UMC.Web
         /// </summary>
         /// <returns></returns>
         public abstract WebActivity GetFirstActivity();
-        /// <summary>
-        /// 下一次的获取的Activity
-        /// </summary>
-        /// <param name="ActivityId">当前的ActivityId</param>
-        /// <returns></returns>
-        //public virtual WebActivity GetNextActivity(string ActivityId)
-        //{
-        //    return WebActivity.Empty;
-        //}
+
     }
 }

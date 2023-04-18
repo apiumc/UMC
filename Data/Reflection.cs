@@ -6,6 +6,8 @@ using System.Collections;
 using UMC.Web;
 using System.Collections.Generic;
 using System.IO;
+using System.Text;
+using System.Security.Cryptography.X509Certificates;
 
 namespace UMC.Data
 {
@@ -24,7 +26,7 @@ namespace UMC.Data
             reflection.Provider = provider;
             _Instance = reflection;
         }
-
+       
         public static Reflection Instance()
         {
             if (_Instance == null)
@@ -37,7 +39,7 @@ namespace UMC.Data
                 var rps = _Instance.Configurate("assembly");// ProviderConfiguration.(Path("App_Data\\UMC\\assembly.xml"));
                 if (rps != null)
                 {
-                    if (rps == null || rps.Providers.Contains(providerName) == false)
+                    if (rps == null || rps.ContainsKey(providerName) == false)
                     {
                         _Instance.Provider = Provider.Create(providerName, typeof(Reflection).FullName);
                     }
@@ -52,7 +54,7 @@ namespace UMC.Data
         }
         static Reflection _Instance;
 
-        static string BaseDirectory = System.Environment.CurrentDirectory;
+        static string BaseDirectory = System.AppContext.BaseDirectory;
         /// <summary>
         /// 转化路径
         /// </summary>
@@ -62,10 +64,6 @@ namespace UMC.Data
         {
             return Path(path);
         }
-        //public virtual Guid AppKey()
-        //{
-        //    return Guid.Empty;
-        //}
 
         static String toPath(String path)
         {
@@ -126,6 +124,22 @@ namespace UMC.Data
                 }
                 catch { }
             }
+
+            WebRuntime.webFactorys.Sort((x, y) => y.Weight.CompareTo(x.Weight));
+            var em = WebRuntime.flows.GetEnumerator();
+            while (em.MoveNext())
+            {
+                em.Current.Value.Sort((x, y) => y.Weight.CompareTo(x.Weight));
+
+            }
+
+            var sb = new StringBuilder();
+            foreach (var cls in WebRuntime.RegisterCls())
+            {
+                sb.AppendLine($"UMC.Web.WebClient.Register(()=>new {cls}());");
+            }
+            Utility.Writer(ConfigPath("Codes/register.cs"), sb.ToString());
+
         }
         static string Path(string path)
         {
@@ -202,7 +216,7 @@ namespace UMC.Data
 
         }
 
-        internal protected virtual bool IsAuthorization(Security.Identity identity, String path)
+        internal protected virtual bool IsAuthorization(Security.Identity identity, int site, String path)
         {
             return true;
         }
@@ -330,7 +344,7 @@ namespace UMC.Data
         public static object CreateObject(ProviderConfiguration providerConfig, string providerName, params object[] args)
         {
 
-            Provider provider = (Provider)providerConfig.Providers[providerName];
+            Provider provider = (Provider)providerConfig[providerName];
             if (provider == null)
             {
                 throw new ArgumentException(String.Format("{0} 没有找到{1}配置", providerConfig.ProviderType, providerName), "providerName");
@@ -350,13 +364,12 @@ namespace UMC.Data
         {
             if (String.IsNullOrEmpty(provider.Type))
             {
-                throw new ArgumentException("UMC.Data.Provider在创建类型实例事type不能为空");
+                throw new ArgumentException("UMC.Data.Provider在创建类型实例type属性不能为空");
             }
-            //object obj = null;
             var obj = CreateInstance(provider.Type, args);
-            if (obj != null)
+            if (obj is DataProvider)
             {
-                UMC.Data.Reflection.SetProperty(obj, "Provider", provider);
+                ((DataProvider)obj).Provider = provider;
             }
             return obj;
         }
@@ -370,9 +383,9 @@ namespace UMC.Data
         public static object CreateObject(Type type, UMC.Data.Provider provider, params object[] args)
         {
             var obj = Activator.CreateInstance(type, args);
-            if (obj != null)
+            if (obj is DataProvider)
             {
-                UMC.Data.Reflection.SetProperty(obj, "Provider", provider);
+                ((DataProvider)obj).Provider = provider;
             }
             return obj;
         }
@@ -391,7 +404,7 @@ namespace UMC.Data
             {
                 return null;
             }
-            else if (pc.Providers.ContainsKey(providerName))
+            else if (pc.ContainsKey(providerName))
             {
                 return CreateObject(pc[providerName], args);
             }
@@ -421,13 +434,13 @@ namespace UMC.Data
             var als = AppDomain.CurrentDomain.GetAssemblies();
             foreach (var a in als)//mscorlib, 
             {
-                var type2 = a.GetType(TypeName);
+                var type2 = a.GetType(TypeName, false, false);
                 if (type2 != null)
                 {
                     return type2;
                 }
             }
-            return System.Type.GetType(TypeName, true, IgnoreErrors);
+            return System.Type.GetType(TypeName, IgnoreErrors, false);
         }
 
         /// <summary>
@@ -517,12 +530,28 @@ namespace UMC.Data
 
         }
 
+        public static IDictionary PropertyToDictionary(Record obj, IDictionary dic)
+        {
+            if (obj == null)
+            {
+                return dic;
+            }
+            if (dic == null)
+            {
+                throw new ArgumentNullException("dic");
+            }
+            obj.GetValues((t, v) => dic[t] = v);
+            return dic;
+
+        }
+
+
         /// <summary>
         /// 通过健/值，来取配设置对应属性值
         /// </summary>
         /// <param name="obj"></param>
         /// <param name="nv"></param>
-        public static void SetProperty(object obj, System.Collections.Specialized.NameValueCollection nv)
+        public static void SetProperty(Record obj, System.Collections.Specialized.NameValueCollection nv)
         {
             if (obj == null)
             {
@@ -536,9 +565,11 @@ namespace UMC.Data
             for (int i = 0; i < nv.Count; i++)
             {
                 if (!String.IsNullOrEmpty(nv.GetKey(i)))
-                    table[nv.GetKey(i)] = nv[i];
+                {
+                    obj.SetValue(nv.GetKey(i), nv[i]);
+                }
             }
-            SetProperty(obj, table);
+            // SetProperty(obj, table);
         }
         /// <summary>
         /// 根据字典对对象的属性赋值
@@ -558,6 +589,24 @@ namespace UMC.Data
             SetProperty(obj, dic, StringComparison.CurrentCulture);
 
         }
+        public static void SetProperty<T>(T obj, IDictionary dic) where T : Record
+        {
+            if (obj == null)
+            {
+                throw new ArgumentNullException("obj");
+            }
+            if (dic == null)
+            {
+                throw new ArgumentNullException("dic");
+            }
+            var me = dic.GetEnumerator();
+            while (me.MoveNext())
+            {
+                obj.SetValue(me.Key as string, me.Value);
+            }
+
+        }
+
         public static void SetProperty(object obj, IDictionary dic, StringComparison comparisonType)
         {
             BindingFlags bindingAttr = BindingFlags.SetProperty | BindingFlags.Public | BindingFlags.Instance;
@@ -570,7 +619,7 @@ namespace UMC.Data
                 if (f != null)
                 {
 
-                    EntityHelper.SetValue(obj, f, me.Value);
+                    CBO.SetValue(obj, f, me.Value);
                 }
             }
         }
@@ -592,7 +641,7 @@ namespace UMC.Data
                 fnode = node.OwnerDocument.CreateElement(type.Name);
                 node.AppendChild(fnode);
             }
-            var pros = type.GetProperties();//(xtertor.Current.Name, bindingAttr);
+            var pros = type.GetProperties();
             foreach (var pro in pros)
             {
                 if (pro.GetIndexParameters().Length == 0)
@@ -657,7 +706,7 @@ namespace UMC.Data
                     PropertyInfo pro = obj.GetType().GetProperty(xtertor.Current.Name, bindingAttr);
                     if (pro != null && pro.CanWrite)
                     {
-                        EntityHelper.SetValue(obj, pro, xtertor.Current.Value);
+                        CBO.SetValue(obj, pro, xtertor.Current.Value);
 
 
                     }
@@ -682,7 +731,7 @@ namespace UMC.Data
                 PropertyInfo pro = obj.GetType().GetProperty(propertyName, bindingAttr);
                 if (pro != null && pro.CanWrite)
                 {
-                    EntityHelper.SetValue(obj, pro, propertyValue);
+                    CBO.SetValue(obj, pro, propertyValue);
                 }
             }
         }
@@ -691,7 +740,7 @@ namespace UMC.Data
         {
             try
             {
-                EntityHelper.SetValue(obj, prototype, propertyValue);
+                CBO.SetValue(obj, prototype, propertyValue);
             }
             catch
             {
@@ -764,6 +813,31 @@ namespace UMC.Data
             }
         }
 
+        /// <summary>
+        /// 把字符串转化与defaultValue类型相同对应的类型实例
+        /// </summary>
+        /// <param name="str">字符</param>
+        /// <param name="defaultValue">默认值</param>
+        /// <returns></returns>
+        public static T ParseObject<T>(object v, T defaultValue)
+        {
+            if (v == null)
+            {
+                return default(T);
+            }
+            if (v is T)
+            {
+                return (T)v;
+            }
+            if (v is String)
+            {
+                return (T)Parse((String)v, typeof(T));
+            }
+            else
+            {
+                return (T)Parse(v.ToString(), typeof(T));
+            }
+        }
 
         /// <summary>
         /// 根据字符串格式，转化对应的类型,支持bool、Guid,DateTime,其它类型返回字符串

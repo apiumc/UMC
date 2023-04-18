@@ -14,10 +14,6 @@ namespace UMC.Web
         {
             get; set;
         }
-        public static UIClick Product(String id)
-        {
-            return new UIClick(id) { Key = "Product" };
-        }
         public static UIClick Search()
         {
             return new UIClick() { Key = "Search" };
@@ -80,12 +76,6 @@ namespace UMC.Web
             }
             return new UIClick(key) { Key = "Pager" };
         }
-        //public static UIClick BarCode(UIClick click)
-        //{
-        //    var cl = new UIClick() { Key = "BarCode" };
-        //    cl._send = click;
-        //    return cl;
-        //}
         public static UIClick Pager(String model, String cmd, String refreshEvent)
         {
             var key = new WebMeta().Put("model", model, "cmd", cmd);
@@ -133,32 +123,11 @@ namespace UMC.Web
                 return new UIClick(address) { Key = "Map" };
             }
         }
-        public static UIClick Category(String id)
-        {
-
-            return new UIClick(new WebMeta().Put("Id", id)) { Key = "Category" };
-        }
-        public static UIClick Category(String id, String title)
-        {
-            return new UIClick(new WebMeta().Put("Id", id, "Title", title)) { Key = "Category" };
-        }
-        public static UIClick IM(WebMeta im)
-        {
-            return new UIClick(im) { Key = "IM" };
-        }
         public static UIClick Click(UIClick click)
         {
             var c = new UIClick() { Key = "Click" };
             c._send = click;
             return c;
-        }
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <returns></returns>
-        public static UIClick IM()
-        {
-            return new UIClick() { Key = "IM" };
         }
         /// <summary>
         /// 列表
@@ -322,7 +291,11 @@ namespace UMC.Web
             }
             writer.Write("}");
         }
-
+        public UIClick Send(WebRequest request)
+        {
+            this.Model = request.Model; this.Command = request.Command;
+            return this;
+        }
         public UIClick Send(string model, string cmd)
         {
             this.Model = model; this.Command = cmd;

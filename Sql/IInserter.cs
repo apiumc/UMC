@@ -15,7 +15,7 @@ namespace UMC.Data.Sql
         /// <typeparam name="T"></typeparam>
         /// <param name="ages"></param>
         /// <returns></returns>
-        bool Execute<T>(params T[] ages);
+        bool Execute<T>(params T[] ages) where T : Record, new();
 
         /// <summary>
         /// 插入数据，采用表名和字典更新数据

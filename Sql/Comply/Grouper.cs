@@ -5,7 +5,7 @@ using System.Data.Common;
 
 namespace UMC.Data.Sql
 {
-    class Grouper<T> : IGrouper<T> where T : class
+    class Grouper<T> : IGrouper<T> where T : Record, new()
     {
         class GroupKey
         {
@@ -98,7 +98,7 @@ namespace UMC.Data.Sql
                 }
 
             }
-            sb.AppendFormat(" FROM {0} ", this.helper.TableInfo.Name);
+            sb.AppendFormat(" FROM {0} ", this.helper.TableName);
 
             var li = this.query.FormatSqlText(sb, new List<object>(), this.sqler.DbProvider);
             if (this.fields.Length > 0)
@@ -151,40 +151,13 @@ namespace UMC.Data.Sql
 
         void Group(T field, string Formula)
         {
-            var dic = CBO.GetProperty(field);
-            var em = dic.GetEnumerator();
-            while (em.MoveNext())
+            field.GetValues((t, v) =>
             {
-                this.GroupKeys.Add(new GroupKey { Field = em.Current.Key, Name = em.Current.Key, Formula = Formula });
-            }
+                this.GroupKeys.Add(new GroupKey { Field = t, Name = t, Formula = Formula });
+
+            });
 
         }
-        //void Group(T field, string Formula, T asFild)
-        //{
-        //    var dic = CBO.GetProperty(field);
-
-        //    var asDic = CBO.GetProperty(asFild);
-        //    if (asDic.Count == 0)
-        //    {
-        //        var em = dic.GetEnumerator();
-        //        while (em.MoveNext())
-        //        {
-        //            this.GroupKeys.Add(new GroupKey { Field = em.Current.Key, Name = em.Current.Key, Formula = Formula });
-        //        }
-
-        //    }
-        //    else
-        //    {
-        //        var m = dic.GetEnumerator();
-        //        var am = asDic.GetEnumerator();
-        //        if (m.MoveNext() && am.MoveNext())
-        //        {
-
-        //            this.GroupKeys.Add(new GroupKey { Field = m.Current.Key, Name = am.Current.Key, Formula = Formula });
-        //        }
-        //    }
-
-        //}
         void Group(string field, string Formula, String asName)
         {
             this.GroupKeys.Add(new GroupKey { Field = field, Formula = Formula, Name = asName });
@@ -230,17 +203,6 @@ namespace UMC.Data.Sql
             this.script = Script.Create(sb.ToString(), agrs);
             return sqer.ExecuteTable(this.script.Text, this.script.Arguments);
         }
-
-        //void IGrouper<T>.Query(DataReader reader)
-        //{
-        //    var sb = new StringBuilder();
-        //    var agrs = this.Format(sb);
-        //    this.seq.FormatSqlText(sb);
-
-        //    ISqler sqer = this.sqler;
-        //    this.script = Script.Create(sb.ToString(), agrs);
-        //    sqer.Execute(this.script.Text, reader, this.script.Arguments);
-        //}
         IGroupOrder<T> IGrouper<T>.Order
         {
             get { return this.seq; }
@@ -288,12 +250,10 @@ namespace UMC.Data.Sql
 
         IGrouper<T> IGrouper<T>.Count(T field)
         {
-            var dic = CBO.GetProperty(field);
-            var em = dic.GetEnumerator();
-            while (em.MoveNext())
-            {
-                this.GroupKeys.Add(new GroupKey { Field = "*", Name = em.Current.Key, Formula = "COUNT" });
-            }
+            field.GetValues((t, v) =>
+             {
+                 this.GroupKeys.Add(new GroupKey { Field = "*", Name = t, Formula = "COUNT" });
+             });
             return this;
         }
 
@@ -326,30 +286,6 @@ namespace UMC.Data.Sql
             Group(field, "MIN", asName);
             return this;
         }
-
-        //IGrouper<T> IGrouper<T>.Sum(T field, T asField)
-        //{
-        //    Group(field, "Sum", asField);
-        //    return this;
-        //}
-
-        //IGrouper<T> IGrouper<T>.Avg(T field, T asField)
-        //{
-        //    Group(field, "Avg", asField);
-        //    return this;
-        //}
-
-        //IGrouper<T> IGrouper<T>.Max(T field, T asField)
-        //{
-        //    Group(field, "Max", asField);
-        //    return this;
-        //}
-
-        //IGrouper<T> IGrouper<T>.Min(T field, T asField)
-        //{
-        //    Group(field, "Min", asField);
-        //    return this;
-        //}
 
         #endregion
     }

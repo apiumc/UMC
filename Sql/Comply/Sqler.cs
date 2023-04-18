@@ -58,8 +58,6 @@ namespace UMC.Data.Sql
                         cmd.CommandText = SqlParamer.Format(this.dbProvider, this.isAutoPfx, cmd, sqlText, paramers);
                         break;
                 }
-                //cmd.Parameters[0]
-                //UMC.Data.Utility.Log("SQL", cmd.CommandText, paramers);
                 this.script = Script.Create(cmd.CommandText, paramers);
 
                 return cmdAcs(cmd);
@@ -141,14 +139,14 @@ namespace UMC.Data.Sql
         T ISqler.ExecuteSingle<T>(string sqlText, params object[] paramers)
         {
 
-            EntityHelper sqlHelper = new EntityHelper(this.dbProvider, typeof(T));
+            //var  sqlHelper = new EntityHelper(this.dbProvider);
             return (T)Progress(cmd =>
             {
                 IDataReader dr = cmd.ExecuteReader();
                 try
                 {
                     if (dr.Read())
-                        return (T)CBO.CreateObject(Activator.CreateInstance(sqlHelper.ObjType), sqlHelper, dr);
+                        return CBO.CreateObject(new T(), dr);
                 }
                 finally
                 {
@@ -160,7 +158,7 @@ namespace UMC.Data.Sql
 
         List<T> ISqler.Execute<T>(string sqlText, params object[] paramers)
         {
-            EntityHelper sqlHelper = new EntityHelper(this.dbProvider, typeof(T));
+            //var sqlHelper = new EntityHelper<T>(this.dbProvider);
             var list = new List<T>();
             ISqler sqler = this;
             sqler.Execute<T>(sqlText, r => list.Add(r), paramers);
@@ -274,14 +272,6 @@ namespace UMC.Data.Sql
             ((ISqler)this).Execute(sqlText, process, new object[] { dictionary });
         }
 
-        //static string Format(string format, List<object> olist, System.Collections.IDictionary diction)
-        //{
-
-        //    return DbCommonFactory.SqlFormat(format, olist, diction);
-
-        //}
-
-
 
         List<T> ISqler.Execute<T>(string sqlText, int start, int limit, params object[] paramers)
         {
@@ -290,7 +280,7 @@ namespace UMC.Data.Sql
             var isPag = sL == sqlText.Length;
             return (List<T>)Progress(cmd =>
             {
-                EntityHelper sqlHelper = new EntityHelper(this.dbProvider, typeof(T));
+                //EntityHelper sqlHelper = new EntityHelper(this.dbProvider, typeof(T));
                 IDataReader dr = cmd.ExecuteReader();
 
                 List<T> list = new List<T>();
@@ -301,7 +291,7 @@ namespace UMC.Data.Sql
                     {
                         if (start <= i)
                         {
-                            list.Add((T)CBO.CreateObject(Activator.CreateInstance(sqlHelper.ObjType), sqlHelper, dr));
+                            list.Add(CBO.CreateObject(new T(), dr));
                         }
                         i++;
                         if (limit <= list.Count)
@@ -312,7 +302,7 @@ namespace UMC.Data.Sql
                     else
                     {
 
-                        list.Add((T)CBO.CreateObject(Activator.CreateInstance(sqlHelper.ObjType), sqlHelper, dr));
+                        list.Add(CBO.CreateObject(new T(), dr));
                     }
                 }
                 dr.Close();
@@ -359,14 +349,14 @@ namespace UMC.Data.Sql
         void ISqler.Execute<T>(string sqlText, DataReader<T> reader, params object[] paramers)
         {
 
-            EntityHelper sqlHelper = new EntityHelper(this.dbProvider, typeof(T));
+            //EntityHelper sqlHelper = new EntityHelper(this.dbProvider, typeof(T));
             Progress(cmd =>
             {
                 var dr = cmd.ExecuteReader();
                 try
                 {
                     while (dr.Read())
-                        reader((T)CBO.CreateObject(Activator.CreateInstance(sqlHelper.ObjType), sqlHelper, dr));
+                        reader(CBO.CreateObject(new T(), dr));
                 }
                 finally
                 {
@@ -392,7 +382,7 @@ namespace UMC.Data.Sql
             var isPag = sL == sqlText.Length;
             Progress(cmd =>
              {
-                 EntityHelper sqlHelper = new EntityHelper(this.dbProvider, typeof(T));
+                 //EntityHelper sqlHelper = new EntityHelper(this.dbProvider, typeof(T));
                  IDataReader dr = cmd.ExecuteReader();
                  var Count = 0;
                  var i = 0;
@@ -403,7 +393,7 @@ namespace UMC.Data.Sql
                          if (start <= i)
                          {
                              Count++;
-                             reader((T)CBO.CreateObject(Activator.CreateInstance(sqlHelper.ObjType), sqlHelper, dr));
+                             reader(CBO.CreateObject(new T(), dr));
                          }
                          i++;
                          if (limit <= Count)
@@ -415,7 +405,7 @@ namespace UMC.Data.Sql
                      {
 
                          Count++;
-                         reader((T)CBO.CreateObject(Activator.CreateInstance(sqlHelper.ObjType), sqlHelper, dr));
+                         reader(CBO.CreateObject(new T(), dr));
                      }
                  }
                  dr.Close();

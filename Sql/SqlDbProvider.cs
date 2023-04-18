@@ -168,22 +168,10 @@ namespace UMC.Data.Sql
 
                 if (Instance == null)
                 {
-                    var als = AppDomain.CurrentDomain.GetAssemblies();
-                    foreach (var a in als)//mscorlib, 
-                    {
-                        var type = a.GetType("System.Data.SqlClient.SqlClientFactory");
-                        if (type != null)
-                        {
-                            Instance = type.GetField("Instance").GetValue(null) as System.Data.Common.DbProviderFactory;
 
-                            break;
-                        }
-                    }
-                    if (Instance == null)
-                    {
-                        throw new Exception("请引用SqlClient");
+                    throw new Exception("请引用SqlClient");
 
-                    }
+
                 }
                 return Instance;
             }
