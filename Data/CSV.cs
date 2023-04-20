@@ -18,7 +18,7 @@ namespace UMC.Data
             public Log(String key, String msg)
             {
                 this.file = Reflection.ConfigPath(String.Format("Static\\TEMP\\{0}.csv", key));
-               
+
                 if (!System.IO.Directory.Exists(System.IO.Path.GetDirectoryName(file)))
                 {
                     System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(file));
@@ -47,15 +47,15 @@ namespace UMC.Data
             }
             void Writer(string name, params object[] objs)
             {
-                var ks = new List<object>();
-                ks.Add(name);
-                ks.AddRange(objs);
                 if (String.IsNullOrEmpty(this.file))
                 {
-                    WriteLine(Console.Out, ks.ToArray());
+                    Console.WriteLine(String.Join(", ", objs));
                 }
                 else
                 {
+                    var ks = new List<object>();
+                    ks.Add(name);
+                    ks.AddRange(objs);
                     using (FileStream stream = new FileStream(this.file, FileMode.Append, FileAccess.Write, FileShare.ReadWrite))
                     {
                         var writer = new System.IO.StreamWriter(stream);

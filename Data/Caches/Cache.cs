@@ -78,17 +78,15 @@ namespace UMC.Data.Caches
                 var rcols = record.GetColumns();
                 for (byte i = 0; i < rcols.Length; i++)
                 {
-                    var column = signed.FirstOrDefault(s => s.Name == rcols[i].Name);
+                    var column = signed.FirstOrDefault(s => String.Equals(s.Name, rcols[i].Name, StringComparison.CurrentCultureIgnoreCase));
                     if (column != null)
                     {
-
                         column.Type = column.Type;
-
                     }
                     else
                     {
 
-                        column = rcols[i];// new RecordColumn(properties[i].Name, properties[i].PropertyType);
+                        column = rcols[i];
                         sb.Add((byte)signed.Count);
                         sb.Add(column.TypeCode);
                         signed.Add(column);
@@ -101,7 +99,7 @@ namespace UMC.Data.Caches
                 var rcols = record.GetColumns();
                 for (byte i = 0; i < rcols.Length; i++)
                 {
-                    var column = rcols[i];// new RecordColumn(properties[i].Name, properties[i].PropertyType);
+                    var column = rcols[i];
                     sb.Add(i);
                     sb.Add(column.TypeCode);
                     signed.Add(column);
@@ -541,12 +539,14 @@ namespace UMC.Data.Caches
                 {
                     var index = values[i][0];
                     var cln = _Columns[index];
-                    newObject.SetValue(cln.Name, cln.Parse(values[i], rs));
-                    //var p = properties.FirstOrDefault(c => c.Name == cln.Name);
-                    //if (p != null)
-                    //{
-                    //    p.SetValue(newObject, cln.Parse(values[i], rs), null);
-                    //}
+                    try
+                    {
+                        newObject.SetValue(cln.Name, cln.Parse(values[i], rs));
+                    }
+                    catch //(Exception ex)
+                    {
+                        //Utility.Error("Cache", this._Name, cln.Name, ex.Message);
+                    }
                 }
                 return newObject;
 
